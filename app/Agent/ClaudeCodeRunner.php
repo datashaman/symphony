@@ -220,8 +220,13 @@ class ClaudeCodeRunner
 
             // Log unknown types at debug
             $type = $data['type'] ?? null;
-            if ($type && !in_array($type, ['message', 'content_block_delta', 'content_block_stop', 'message_delta', 'message_stop', 'result', 'system', 'assistant'])) {
-                $this->logger->debug('Unknown stream event type', ['type' => $type]);
+            $knownTypes = [
+                'message', 'content_block_delta', 'content_block_stop',
+                'message_delta', 'message_stop', 'result', 'system',
+                'assistant', 'user', 'rate_limit_event',
+            ];
+            if ($type && !in_array($type, $knownTypes)) {
+                $this->logger->warning("Unhandled stream event type: {$type}", ['data' => $data]);
             }
         }
     }
