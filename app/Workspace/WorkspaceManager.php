@@ -68,6 +68,17 @@ class WorkspaceManager
             }
 
             if ($this->branchExists($branch)) {
+                // Branch exists — check if it's already checked out in a worktree
+                $existingPath = $this->findWorktreeForBranch($branch);
+                if ($existingPath) {
+                    // Use the existing worktree instead of creating a new one
+                    $this->logger->info('Using existing worktree for branch', [
+                        'branch' => $branch,
+                        'path' => $existingPath,
+                    ]);
+                    return $existingPath;
+                }
+
                 $this->logger->info('Creating worktree with existing branch', [
                     'branch' => $branch,
                     'path' => $path,
@@ -341,6 +352,27 @@ class WorkspaceManager
         }
 
         return false;
+    }
+
+    private function findWorktreeForBranch(string $branch): ?string
+    {
+        $output = $this->git('worktree list --porcelain');
+        $currentPath = null;
+
+        foreach (explode("\n", $output) as $line) {
+            if (str_starts_with($line, 'worktree ')) {
+                $currentPath = substr($line, 9);
+            } elseif (str_starts_with($line, 'branch refs/heads/')) {
+                $wtBranch = substr($line, 18);
+                if ($wtBranch === $branch) {
+                    return $currentPath;
+                }
+            } elseif ($line === '') {
+                $currentPath = null;
+            }
+        }
+
+        return null;
     }
 
     private function branchExists(string $branch): bool
