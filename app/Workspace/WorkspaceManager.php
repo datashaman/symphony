@@ -53,14 +53,14 @@ class WorkspaceManager
         $path = $this->pathForIssue($issue);
         $branch = $issue->branchName;
 
-        if (is_dir($path) && file_exists($path . '/.git')) {
+        if ($this->worktreeExists($path)) {
             // Worktree already exists — reuse it
             $this->logger->info('Reusing existing worktree', [
                 'branch' => $branch,
                 'path' => $path,
             ]);
         } else {
-            // Clean up stale directory if it exists but isn't a worktree
+            // Clean up stale directory if it exists but isn't a registered worktree
             if (is_dir($path)) {
                 $this->logger->info('Removing stale workspace directory', ['path' => $path]);
                 $this->recursiveDelete($path);
@@ -256,6 +256,23 @@ class WorkspaceManager
         }
 
         throw new RuntimeException('Cannot detect base branch (tried origin/HEAD, main, master)');
+    }
+
+    private function worktreeExists(string $path): bool
+    {
+        $output = $this->git('worktree list --porcelain');
+        $realPath = is_dir($path) ? realpath($path) : $path;
+
+        foreach (explode("\n", $output) as $line) {
+            if (str_starts_with($line, 'worktree ')) {
+                $worktreePath = substr($line, 9);
+                if ($worktreePath === $realPath || $worktreePath === $path) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function branchExists(string $branch): bool
