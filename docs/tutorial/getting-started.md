@@ -32,12 +32,13 @@ GITHUB_TOKEN=ghp_your_actual_token_here
 
 ## Step 3: Configure the Workflow
 
-Edit `WORKFLOW.md` and update the `tracker` section. The repository is auto-detected from your CWD's git remote:
+Edit `WORKFLOW.md` and update the `tracker` section to point to your repository:
 
 ```yaml
 ---
 tracker:
   kind: github
+  repository: your-username/your-repo
   api_key: $GITHUB_TOKEN
   active_states:
     - todo
@@ -69,8 +70,8 @@ This is retry attempt {{ attempt }}. Review what was done previously and continu
 ```
 
 Key things to change:
+- `tracker.repository` — your GitHub `owner/repo`
 - `active_states` — the issue labels/states that Symphony should pick up (case-insensitive)
-- `tracker.repository` — only needed if you want to override the auto-detected git remote
 
 ## Step 4: Create a Test Issue
 

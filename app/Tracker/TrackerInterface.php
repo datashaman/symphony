@@ -32,8 +32,5 @@ interface TrackerInterface
      * Creates any that are missing. No-op for trackers that use
      * built-in workflow statuses (e.g., Jira).
      */
-    /**
-     * @return string[] Labels that were created
-     */
-    public function ensureLabels(): array;
+    public function ensureLabels(): void;
 }

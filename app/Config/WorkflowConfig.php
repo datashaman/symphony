@@ -48,38 +48,7 @@ class WorkflowConfig
 
     public function trackerRepository(): ?string
     {
-        $repo = $this->resolved['tracker']['repository'] ?? null;
-
-        if ($repo === null) {
-            $repo = self::detectGitHubRepository();
-        }
-
-        return $repo;
-    }
-
-    private static function detectGitHubRepository(): ?string
-    {
-        $output = [];
-        $exitCode = 0;
-        exec('git remote get-url origin 2>/dev/null', $output, $exitCode);
-
-        if ($exitCode !== 0 || empty($output[0])) {
-            return null;
-        }
-
-        $url = trim($output[0]);
-
-        // SSH: git@github.com:owner/repo.git
-        if (preg_match('#git@github\.com:(.+?)(?:\.git)?$#', $url, $matches)) {
-            return $matches[1];
-        }
-
-        // HTTPS: https://github.com/owner/repo.git
-        if (preg_match('#https?://github\.com/(.+?)(?:\.git)?$#', $url, $matches)) {
-            return $matches[1];
-        }
-
-        return null;
+        return $this->resolved['tracker']['repository'] ?? null;
     }
 
     public function trackerEndpoint(): ?string

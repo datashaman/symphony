@@ -25,13 +25,11 @@ class ClaudeCodeRunner
      *
      * @return array{success: bool, tokens: array{input_tokens: int, output_tokens: int}, session_id: string|null}
      */
-    public function runTurn(string $prompt, string $workspacePath, bool $isContinuation = false, ?string $resumeSessionId = null): array
+    public function runTurn(string $prompt, string $workspacePath, bool $isContinuation = false): array
     {
         $command = $this->config->claudeCommand();
 
-        if ($resumeSessionId) {
-            $command .= ' --resume ' . escapeshellarg($resumeSessionId);
-        } elseif ($isContinuation) {
+        if ($isContinuation) {
             $command .= ' --continue';
         }
 
@@ -47,8 +45,8 @@ class ClaudeCodeRunner
             throw new RuntimeException("Failed to launch Claude Code: {$command}");
         }
 
-        // Write prompt to stdin (skip for --continue turns which resume without new input)
-        if (!$isContinuation || $resumeSessionId) {
+        // Write prompt and close stdin
+        if (!$isContinuation) {
             fwrite($pipes[0], $prompt);
         }
         fclose($pipes[0]);
@@ -147,7 +145,7 @@ class ClaudeCodeRunner
      *
      * @return array{success: bool, tokens: array{input_tokens: int, output_tokens: int}, session_id: string|null}
      */
-    public function run(string $prompt, string $workspacePath, ?string $resumeSessionId = null): array
+    public function run(string $prompt, string $workspacePath): array
     {
         $maxTurns = $this->config->maxTurns();
 
@@ -162,15 +160,9 @@ class ClaudeCodeRunner
                 'turn' => $turn,
                 'max_turns' => $maxTurns,
                 'continuation' => $isContinuation,
-                'resume_session_id' => $turn === 1 ? $resumeSessionId : null,
             ]);
 
-            $result = $this->runTurn(
-                $prompt,
-                $workspacePath,
-                $isContinuation,
-                $turn === 1 ? $resumeSessionId : null,
-            );
+            $result = $this->runTurn($prompt, $workspacePath, $isContinuation);
 
             $totalTokens['input_tokens'] += $result['tokens']['input_tokens'];
             $totalTokens['output_tokens'] += $result['tokens']['output_tokens'];
