@@ -22,7 +22,7 @@ class WorkflowConfig
             'max_retry_backoff_ms' => 300000,
         ],
         'claude' => [
-            'command' => 'claude -p --verbose --output-format stream-json',
+            'command' => 'claude -p --verbose --output-format stream-json --dangerously-skip-permissions',
             'turn_timeout_ms' => 3600000,
             'stall_timeout_ms' => 300000,
         ],
