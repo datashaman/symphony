@@ -21,14 +21,42 @@ workspace:
 agent:
   max_concurrent_agents: 5
   max_turns: 20
+
+pipeline:
+  stages:
+    - name: plan
+      trigger: stage:plan
+      command: claude -p --verbose --output-format stream-json --model claude-opus-4-6
+      max_turns: 10
+    - name: implement
+      trigger: stage:implement
+      command: claude -p --verbose --output-format stream-json --model claude-sonnet-4-6 --dangerously-skip-permissions
+      max_turns: 30
 ---
 
-You are working on issue {{ issue.identifier }}: {{ issue.title }}
+---stage:plan---
+
+You are a senior architect analyzing issue {{ issue.identifier }}: {{ issue.title }}
 
 {{ issue.description }}
 
+Your job is to:
+1. Understand the requirements
+2. Research the codebase for relevant context
+3. Produce a detailed implementation plan
+
+When your plan is ready, write it as a comment on the issue. Then remove the `stage:plan` label and add the `stage:implement` label.
+
+---stage:implement---
+
+You are an expert engineer implementing issue {{ issue.identifier }}: {{ issue.title }}
+
+{{ issue.description }}
+
+Read the planning comments on this issue for context and implementation guidance. Follow the plan closely.
+
 {% if attempt %}
-This is retry attempt {{ attempt }}. Review what was done previously and continue from where you left off.
+This is retry attempt {{ attempt }}. Check git log and test output to continue.
 {% endif %}
 
 ## Prime Directive
