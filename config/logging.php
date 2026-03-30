@@ -55,7 +55,7 @@ return [
 
         'symphony' => [
             'driver' => 'stack',
-            'channels' => ['stderr', 'file'],
+            'channels' => ['file'],
             'ignore_exceptions' => false,
         ],
 
