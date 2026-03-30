@@ -18,8 +18,6 @@ class GitHubTracker implements TrackerInterface
 
     private string $repo;
 
-    private array $activeStates;
-
     private array $terminalStates;
 
     public function __construct(
@@ -33,7 +31,6 @@ class GitHubTracker implements TrackerInterface
         }
 
         [$this->owner, $this->repo] = explode('/', $repository, 2);
-        $this->activeStates = array_map('strtolower', $config->trackerActiveStates());
         $this->terminalStates = array_map('strtolower', $config->trackerTerminalStates());
 
         $this->http = $http ?? Http::withToken($config->trackerApiKey())
@@ -51,8 +48,7 @@ class GitHubTracker implements TrackerInterface
             'per_page' => 100,
         ]);
 
-        return array_values(array_filter($allIssues, fn (Issue $issue) => in_array(strtolower($issue->state), $this->activeStates, true)
-        ));
+        return $allIssues;
     }
 
     public function fetchIssuesByStates(array $states): array
@@ -91,7 +87,7 @@ class GitHubTracker implements TrackerInterface
         ]);
         $existing = array_map(fn ($l) => strtolower($l['name']), $response->json());
 
-        $needed = array_unique(array_merge($this->activeStates, $this->terminalStates, $extraLabels));
+        $needed = array_unique(array_merge($this->terminalStates, $extraLabels));
         $created = [];
 
         foreach ($needed as $label) {
@@ -174,13 +170,7 @@ class GitHubTracker implements TrackerInterface
             }
         }
 
-        foreach ($this->activeStates as $state) {
-            if (in_array($state, $labelNames, true)) {
-                return $state;
-            }
-        }
-
-        return 'unknown';
+        return 'open';
     }
 
     private function extractPriority(array $labels): ?int

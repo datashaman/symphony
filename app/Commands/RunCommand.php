@@ -16,7 +16,7 @@ use LaravelZero\Framework\Commands\Command;
 
 class RunCommand extends Command
 {
-    protected $signature = 'run {workflow=./WORKFLOW.md}';
+    protected $signature = 'run {workflow=./workflow.yml}';
 
     protected $description = 'Run the Symphony orchestrator';
 

@@ -10,7 +10,6 @@ class WorkflowConfig
 
     private const DEFAULTS = [
         'tracker' => [
-            'active_states' => ['Todo', 'In Progress'],
             'terminal_states' => ['Closed', 'Cancelled', 'Canceled', 'Duplicate', 'Done'],
         ],
         'polling' => [
@@ -118,7 +117,7 @@ class WorkflowConfig
 
     public function trackerActiveStates(): array
     {
-        return $this->resolved['tracker']['active_states'];
+        return $this->resolved['tracker']['active_states'] ?? [];
     }
 
     public function trackerTerminalStates(): array

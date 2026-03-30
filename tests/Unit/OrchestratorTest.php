@@ -17,7 +17,6 @@ function makeOrchestratorConfig(int $maxConcurrent = 10): WorkflowConfig
         'tracker' => [
             'kind' => 'github',
             'api_key' => '$ORCH_API_KEY',
-            'active_states' => ['todo', 'in-progress'],
             'terminal_states' => ['done', 'closed'],
         ],
         'agent' => [
@@ -37,10 +36,10 @@ function makeIssueWithPriority(string $id, ?int $priority, string $createdAt = '
         title: "Issue {$id}",
         description: '',
         priority: $priority,
-        state: 'todo',
+        state: 'open',
         branchName: "symphony/test_{$id}",
         url: '',
-        labels: ['todo'],
+        labels: [],
         blockedBy: [],
         createdAt: new DateTimeImmutable($createdAt),
         updatedAt: new DateTimeImmutable($createdAt),
@@ -119,7 +118,6 @@ it('filters eligible issues by pipeline stage labels', function () {
         'tracker' => [
             'kind' => 'github',
             'api_key' => '$ORCH_API_KEY',
-            'active_states' => ['todo', 'in-progress'],
             'terminal_states' => ['done', 'closed'],
         ],
         'pipeline' => [
@@ -144,9 +142,9 @@ it('filters eligible issues by pipeline stage labels', function () {
     // Issue with stage:plan label should be eligible for plan stage
     $issueWithPlan = new Issue(
         id: '1', identifier: 'test#1', title: 'Issue 1',
-        description: '', priority: null, state: 'todo',
+        description: '', priority: null, state: 'open',
         branchName: 'symphony/test_1', url: '',
-        labels: ['todo', 'stage:plan'], blockedBy: [],
+        labels: ['stage:plan'], blockedBy: [],
         createdAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
         updatedAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
     );
@@ -154,9 +152,9 @@ it('filters eligible issues by pipeline stage labels', function () {
     // Issue without stage label should NOT be eligible
     $issueNoStage = new Issue(
         id: '2', identifier: 'test#2', title: 'Issue 2',
-        description: '', priority: null, state: 'todo',
+        description: '', priority: null, state: 'open',
         branchName: 'symphony/test_2', url: '',
-        labels: ['todo'], blockedBy: [],
+        labels: [], blockedBy: [],
         createdAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
         updatedAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
     );

@@ -13,7 +13,6 @@ function makeGitHubConfig(): WorkflowConfig
             'kind' => 'github',
             'api_key' => '$GH_TOKEN',
             'repository' => 'datashaman/my-project',
-            'active_states' => ['todo', 'in-progress'],
             'terminal_states' => ['done', 'closed'],
         ],
     ]);
@@ -44,7 +43,7 @@ it('fetches candidate issues', function () {
     expect($issues[0]->id)->toBe('42');
     expect($issues[0]->identifier)->toBe('my-project#42');
     expect($issues[0]->title)->toBe('Fix login bug');
-    expect($issues[0]->state)->toBe('todo');
+    expect($issues[0]->state)->toBe('open');
     expect($issues[0]->branchName)->toBe('symphony/my-project_42');
 });
 
@@ -98,7 +97,7 @@ it('fetches states by IDs for reconciliation', function () {
     $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $states = $tracker->fetchStatesByIds(['42', '99']);
 
-    expect($states)->toBe(['42' => 'todo', '99' => 'done']);
+    expect($states)->toBe(['42' => 'open', '99' => 'done']);
 });
 
 it('detects blocked-by from issue body', function () {

@@ -64,15 +64,15 @@ it('builds stage configs with correct overrides', function () {
 it('matches stage by issue labels', function () {
     $config = makePipelineConfig();
 
-    $stage = $config->stageForLabels(['todo', 'stage:plan']);
+    $stage = $config->stageForLabels(['stage:plan']);
     expect($stage)->not->toBeNull();
     expect($stage->name)->toBe('plan');
 
-    $stage = $config->stageForLabels(['in-progress', 'stage:implement']);
+    $stage = $config->stageForLabels(['stage:implement']);
     expect($stage)->not->toBeNull();
     expect($stage->name)->toBe('implement');
 
-    $stage = $config->stageForLabels(['todo']); // No stage trigger
+    $stage = $config->stageForLabels([]); // No stage trigger
     expect($stage)->toBeNull();
 });
 
