@@ -117,6 +117,12 @@ This is a bug fix. Write a failing test first, then fix the bug.
 {% endif %}
 ```
 
+## Prime Directive
+
+Symphony automatically appends a "Prime Directive" section to every rendered prompt. This instructs the agent to commit all changes, push the branch, and create a pull request linking back to the issue. You do not need to include these instructions in your template — they are always added.
+
+The directive uses `issue.identifier` and `issue.url` to generate the correct closing reference (e.g., `Closes https://github.com/owner/repo/issues/42`).
+
 ## Tips
 
 - The template uses Twig with `strict_variables: true` - referencing an undefined variable will error
@@ -124,3 +130,4 @@ This is a bug fix. Write a failing test first, then fix the bug.
 - DateTimes are converted to ISO 8601 strings before rendering
 - Keep prompts focused: the more specific the instructions, the better the agent performs
 - Use `{% if attempt %}` to give retry-specific guidance
+- Do not add commit/push/PR instructions to your template — the prime directive handles this automatically
