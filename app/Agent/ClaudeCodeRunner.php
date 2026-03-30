@@ -218,16 +218,69 @@ class ClaudeCodeRunner
                 $result['tokens']['output_tokens'] += $data['output_tokens'];
             }
 
-            // Log unknown types at debug
+            // Log activity from stream events
             $type = $data['type'] ?? null;
-            $knownTypes = [
-                'message', 'content_block_delta', 'content_block_stop',
-                'message_delta', 'message_stop', 'result', 'system',
-                'assistant', 'user', 'rate_limit_event',
-            ];
-            if ($type && !in_array($type, $knownTypes)) {
-                $this->logger->warning("Unhandled stream event type: {$type}", ['data' => $data]);
-            }
+            $this->logStreamActivity($type, $data);
+        }
+    }
+
+    private function logStreamActivity(?string $type, array $data): void
+    {
+        switch ($type) {
+            case 'assistant':
+                // Log tool use and text output from the assistant
+                $content = $data['message']['content'] ?? [];
+                foreach ($content as $block) {
+                    if (($block['type'] ?? '') === 'tool_use') {
+                        $toolName = $block['name'] ?? 'unknown';
+                        $input = $block['input'] ?? [];
+                        $summary = match ($toolName) {
+                            'Read' => $input['file_path'] ?? '',
+                            'Edit' => $input['file_path'] ?? '',
+                            'Write' => $input['file_path'] ?? '',
+                            'Bash' => mb_strimwidth($input['command'] ?? '', 0, 120, '...'),
+                            'Glob' => $input['pattern'] ?? '',
+                            'Grep' => ($input['pattern'] ?? '') . ' ' . ($input['path'] ?? ''),
+                            default => '',
+                        };
+                        $this->logger->info("Tool: {$toolName}", ['detail' => $summary]);
+                    } elseif (($block['type'] ?? '') === 'text') {
+                        $text = mb_strimwidth($block['text'] ?? '', 0, 200, '...');
+                        if ($text !== '') {
+                            $this->logger->info('Claude', ['text' => $text]);
+                        }
+                    }
+                }
+                break;
+
+            case 'result':
+                $subtype = $data['subtype'] ?? 'unknown';
+                $cost = $data['total_cost_usd'] ?? 0;
+                $turns = $data['num_turns'] ?? 0;
+                $duration = isset($data['duration_ms']) ? round($data['duration_ms'] / 1000, 1) : 0;
+                $this->logger->info("Result: {$subtype}", [
+                    'turns' => $turns,
+                    'duration_s' => $duration,
+                    'cost_usd' => round($cost, 4),
+                ]);
+                break;
+
+            case 'system':
+            case 'user':
+            case 'message':
+            case 'content_block_delta':
+            case 'content_block_stop':
+            case 'message_delta':
+            case 'message_stop':
+            case 'rate_limit_event':
+                // Known types, no special logging needed
+                break;
+
+            default:
+                if ($type) {
+                    $this->logger->warning("Unhandled stream event type: {$type}", ['data' => $data]);
+                }
+                break;
         }
     }
 
