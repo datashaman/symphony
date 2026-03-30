@@ -29,7 +29,7 @@
 
 | Code | Meaning |
 |------|---------|
-| `0` | Clean shutdown (via SIGINT/SIGTERM or all work complete) |
+| `0` | Clean shutdown (via SIGINT/SIGTERM) |
 | `1` | Startup failure (workflow file not found, invalid config, tracker creation failed) |
 
 Child processes (forked per issue) use these exit codes:
@@ -55,14 +55,32 @@ The shutdown sequence:
 5. Logs final token usage totals
 6. Exits with code 0
 
+## Console Output
+
+Symphony writes user-friendly output to stdout:
+
+```
+Symphony starting (github tracker)
+  Workflow: WORKFLOW.md
+  Log file: /path/to/symphony.log
+  Press Ctrl+C to stop
+Symphony orchestrator started
+  Polling every 30000ms, max 10 concurrent agents
+  Dispatching my-repo#42: Fix the login bug
+    Edit app/Auth/LoginController.php
+    Bash php artisan test --filter=LoginTest
+    Result: success (45.2s, $0.1234)
+  Completed my-repo#42
+```
+
 ## Logging
 
-All log output goes to stderr in structured `key=value` format:
+Structured log output goes to `symphony.log` in `key=value` format:
 
 ```
 ts=2026-03-30T12:00:00Z level=INFO msg="Symphony starting" workflow=WORKFLOW.md tracker=github
-ts=2026-03-30T12:00:00Z level=INFO msg="Dispatching issue" issue_id=42 issue_identifier="#42"
+ts=2026-03-30T12:00:00Z level=INFO msg="Dispatching issue" issue_id=42 issue_identifier="my-repo#42"
 ts=2026-03-30T12:00:00Z level=ERROR msg="Turn timeout reached" elapsed_ms=3600001 timeout_ms=3600000
 ```
 
-Sensitive values (API keys, tokens) are redacted from log output.
+Sensitive values (API keys, tokens, passwords, secrets) are automatically redacted from log output.

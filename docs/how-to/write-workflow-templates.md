@@ -22,12 +22,12 @@ The YAML section configures the tracker, polling, workspace, agent, and claude s
 | Variable | Type | Description |
 |----------|------|-------------|
 | `issue.id` | string | Internal ID from the tracker |
-| `issue.identifier` | string | Human-readable identifier (e.g., `#42`, `PROJ-123`) |
+| `issue.identifier` | string | Human-readable identifier (e.g., `my-repo#42`, `PROJ-123`) |
 | `issue.title` | string | Issue title |
 | `issue.description` | string | Issue body/description |
 | `issue.priority` | int or null | Numeric priority (lower = higher priority) |
 | `issue.state` | string | Current state label |
-| `issue.branchName` | string | Suggested branch name |
+| `issue.branchName` | string | Git branch name (e.g., `symphony/my-repo__42`) |
 | `issue.url` | string | Web URL for the issue |
 | `issue.labels` | string[] | Lowercase label list |
 | `issue.blockedBy` | string[] | IDs of blocking issues |
@@ -89,7 +89,7 @@ You are an expert software engineer working on {{ issue.identifier }}: {{ issue.
 {% endfor %}
 
 ## Instructions
-- Create a feature branch named `{{ issue.branchName }}`
+- Work on the branch `{{ issue.branchName }}`
 - Write tests for your changes
 - Make small, focused commits
 - Do not modify unrelated files
@@ -119,8 +119,8 @@ This is a bug fix. Write a failing test first, then fix the bug.
 
 ## Tips
 
-- The template uses Twig with `strict_variables: true` - referencing an undefined variable will error
-- Autoescaping is disabled - output is plain text, not HTML
+- The template uses Twig with `strict_variables: true` — referencing an undefined variable will error
+- Autoescaping is disabled — output is plain text, not HTML
 - DateTimes are converted to ISO 8601 strings before rendering
 - Keep prompts focused: the more specific the instructions, the better the agent performs
 - Use `{% if attempt %}` to give retry-specific guidance

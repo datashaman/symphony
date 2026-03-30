@@ -1,89 +1,81 @@
-# Configure Workspace Hooks
+# Configure Workspace Setup
 
-Workspace hooks run shell commands at specific points in a workspace's lifecycle. Use them to set up repositories, install dependencies, or clean up resources.
-
-## Hook Phases
-
-| Phase | When | Fatal on failure |
-|-------|------|-----------------|
-| `after_create` | After the workspace directory is created | Yes |
-| `before_run` | Before the agent is launched (not yet implemented in dispatch) | Yes |
-| `before_remove` | Before the workspace directory is deleted | No |
-
-Fatal hooks cause the child process to exit with an error if they return a non-zero exit code. Non-fatal hooks log a warning and continue.
+Workspace setup commands run shell commands when a new git worktree is created for an issue. Use them to install dependencies, copy configuration files, or prepare the environment.
 
 ## Configuration
 
-Hooks are arrays of shell commands under `workspace.hooks`:
+Setup commands are an array of shell commands under `workspace.setup`:
 
 ```yaml
 workspace:
-  root: /tmp/symphony_workspaces
-  hooks:
-    after_create:
-      - "git clone https://github.com/owner/repo.git ."
-      - "composer install --no-interaction"
-    before_run:
-      - "git pull origin main"
-    before_remove:
-      - "git stash"
+  setup:
+    - "cp %BASE%/.env .env"
+    - "composer install --no-interaction --no-progress"
 ```
 
-Each command is executed in the workspace directory as the working directory.
+Each command runs in the worktree directory as the working directory.
 
-## Hook Timeout
+## The `%BASE%` Placeholder
 
-All hooks share a single timeout setting:
+Use `%BASE%` in setup commands to reference the main repository root. This is useful for copying files from the base repo into the worktree:
 
 ```yaml
-hooks:
-  timeout_ms: 60000  # 1 minute (default)
+workspace:
+  setup:
+    - "cp %BASE%/.env .env"
+    - "ln -sf %BASE%/vendor vendor"
 ```
 
-If a hook exceeds this timeout, it's killed with SIGTERM.
+## Setup Timeout
+
+Configure how long each setup command is allowed to run:
+
+```yaml
+workspace:
+  setup_timeout_ms: 60000  # 1 minute (default)
+```
+
+If a command exceeds this timeout, it's killed with SIGTERM and the workspace creation fails (fatal — the child process exits with an error).
 
 ## Examples
 
-### Clone and Install Dependencies
+### PHP/Laravel Project
 
 ```yaml
 workspace:
-  hooks:
-    after_create:
-      - "git clone https://github.com/owner/repo.git ."
-      - "npm install"
-    before_run:
-      - "git checkout main"
-      - "git pull origin main"
+  setup:
+    - "cp %BASE%/.env .env"
+    - "composer install --no-interaction --no-progress"
+    - "php artisan key:generate"
+    - "php artisan migrate --force"
 ```
 
-### Clean Up Before Removal
+### Node.js Project
 
 ```yaml
 workspace:
-  hooks:
-    before_remove:
-      - "git push origin --delete $(git branch --show-current) 2>/dev/null || true"
+  setup:
+    - "cp %BASE%/.env .env"
+    - "npm install"
 ```
 
-### Multiple Setup Steps
+### Symlink Shared Dependencies
+
+To avoid reinstalling dependencies in every worktree:
 
 ```yaml
 workspace:
-  hooks:
-    after_create:
-      - "git clone https://github.com/owner/repo.git ."
-      - "cp .env.example .env"
-      - "composer install --no-interaction --no-progress"
-      - "php artisan key:generate"
-      - "php artisan migrate --force"
+  setup:
+    - "ln -sf %BASE%/vendor vendor"
+    - "ln -sf %BASE%/node_modules node_modules"
+    - "cp %BASE%/.env .env"
 ```
 
 ## Behavior Details
 
 - Commands run sequentially in the order listed
 - Each command runs in a separate process via `proc_open`
-- The working directory is the workspace path (e.g., `/tmp/symphony_workspaces/issue-42`)
+- The working directory is the worktree path
 - stdout and stderr are captured; stderr is included in error messages on failure
-- `after_create` hooks run once when the workspace is first created for an issue
-- `before_remove` hooks run before cleanup on terminal state transitions and during startup cleanup of stale workspaces
+- Setup commands only run when a new worktree is created — existing worktrees are reused without re-running setup
+- If any setup command exits with a non-zero code, workspace creation fails and the child process exits with an error

@@ -51,6 +51,10 @@ tracker:
 polling:
   interval_ms: 30000
 
+workspace:
+  setup:
+    - "cp %BASE%/.env .env"
+
 agent:
   max_concurrent_agents: 5
   max_turns: 20
@@ -66,8 +70,8 @@ This is retry attempt {{ attempt }}. Review what was done previously and continu
 ```
 
 Key things to change:
-- `tracker.repository` - your GitHub `owner/repo`
-- `active_states` - the issue labels/states that Symphony should pick up (case-insensitive)
+- `tracker.repository` — your GitHub `owner/repo`
+- `active_states` — the issue labels/states that Symphony should pick up (case-insensitive)
 
 ## Step 4: Create a Test Issue
 
@@ -79,13 +83,16 @@ Create an issue on your GitHub repository. Make sure it has a label that matches
 ./application run WORKFLOW.md
 ```
 
-You'll see structured log output on stderr:
+You'll see console output and structured logs:
 
 ```
-ts=2026-03-30T12:00:00Z level=INFO msg="Symphony starting" workflow=WORKFLOW.md tracker=github
-ts=2026-03-30T12:00:00Z level=INFO msg="Orchestrator starting"
-ts=2026-03-30T12:00:00Z level=INFO msg="Dispatching issue" issue_id=1 issue_identifier="#1"
-ts=2026-03-30T12:00:00Z level=INFO msg="Starting agent turn" turn=1 max_turns=20 continuation=false
+Symphony starting (github tracker)
+  Workflow: WORKFLOW.md
+  Log file: /path/to/symphony.log
+  Press Ctrl+C to stop
+Symphony orchestrator started
+  Polling every 30000ms, max 5 concurrent agents
+  Dispatching my-repo#1: Fix the login bug
 ```
 
 ## Step 6: Stop the Daemon
@@ -104,12 +111,15 @@ kill $(pgrep -f "application run")
 ## What Happens Under the Hood
 
 1. Symphony reads `WORKFLOW.md` and resolves environment variables (`$GITHUB_TOKEN` becomes your actual token)
-2. On each tick (every 30 seconds by default), it queries the GitHub API for issues matching `active_states`
-3. For each eligible issue, it forks a child process that:
+2. Configured state labels are auto-created on the GitHub repository if missing
+3. On each tick (every 30 seconds by default), it queries the GitHub API for issues matching `active_states`
+4. For each eligible issue, it forks a child process that:
+   - Creates a git worktree for isolation
+   - Runs workspace setup commands (e.g., copying `.env`)
    - Renders the Twig prompt template with issue data
-   - Launches `claude -p --output-format stream-json --worktree`, which creates a git worktree for isolation
+   - Launches Claude Code with the rendered prompt
    - If the agent fails, retries with `--continue` up to `max_turns` times
-4. The parent process monitors children, kills stalled workers, and retries failed issues with exponential backoff
+5. The parent process monitors children, kills stalled workers, and retries failed issues with exponential backoff
 
 ## Next Steps
 
