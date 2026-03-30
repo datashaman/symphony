@@ -12,7 +12,7 @@ function makeRunnerConfig(string $command, int $turnTimeoutMs = 3600000, int $st
             'kind' => 'github',
             'api_key' => '$RUNNER_API_KEY',
         ],
-        'codex' => [
+        'claude' => [
             'command' => $command,
             'turn_timeout_ms' => $turnTimeoutMs,
             'stall_timeout_ms' => $stallTimeoutMs,
@@ -145,7 +145,7 @@ BASH
         'agent' => [
             'max_turns' => 2,
         ],
-        'codex' => [
+        'claude' => [
             'command' => "bash {$script}",
         ],
     ]);

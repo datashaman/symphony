@@ -20,7 +20,7 @@ If an agent fails a turn, it retries on the next turn with a 1-second delay. If 
 Maximum wall-clock time for a single Claude Code invocation:
 
 ```yaml
-codex:
+claude:
   turn_timeout_ms: 3600000  # 1 hour (default)
 ```
 
@@ -31,7 +31,7 @@ If exceeded, the agent process is killed (SIGTERM) and the turn counts as failed
 Maximum time without any output from Claude Code:
 
 ```yaml
-codex:
+claude:
   stall_timeout_ms: 300000  # 5 minutes (default)
 ```
 

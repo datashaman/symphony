@@ -23,7 +23,7 @@ class Orchestrator
     private array $retryQueue = [];
 
     /** @var array{input_tokens: int, output_tokens: int, seconds: float} */
-    private array $codexTotals = ['input_tokens' => 0, 'output_tokens' => 0, 'seconds' => 0];
+    private array $claudeTotals = ['input_tokens' => 0, 'output_tokens' => 0, 'seconds' => 0];
 
     private bool $shutdown = false;
 
@@ -63,7 +63,7 @@ class Orchestrator
         }
 
         $this->waitForChildren();
-        $this->logger->info('Orchestrator stopped', ['totals' => $this->codexTotals]);
+        $this->logger->info('Orchestrator stopped', ['totals' => $this->claudeTotals]);
     }
 
     public function tick(): void
@@ -237,7 +237,7 @@ class Orchestrator
             return;
         }
 
-        $stallTimeoutMs = $this->config->codexStallTimeoutMs();
+        $stallTimeoutMs = $this->config->claudeStallTimeoutMs();
         $nowNs = hrtime(true);
         $finishedIds = [];
 
@@ -424,8 +424,8 @@ class Orchestrator
         return $this->retryQueue;
     }
 
-    public function getCodexTotals(): array
+    public function getClaudeTotals(): array
     {
-        return $this->codexTotals;
+        return $this->claudeTotals;
     }
 }

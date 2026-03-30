@@ -21,8 +21,8 @@ class WorkflowConfig
             'max_turns' => 20,
             'max_retry_backoff_ms' => 300000,
         ],
-        'codex' => [
-            'command' => 'claude -p --output-format stream-json',
+        'claude' => [
+            'command' => 'claude -p --output-format stream-json --worktree',
             'turn_timeout_ms' => 3600000,
             'stall_timeout_ms' => 300000,
         ],
@@ -111,19 +111,19 @@ class WorkflowConfig
         return $this->resolved['agent']['max_retry_backoff_ms'];
     }
 
-    public function codexCommand(): string
+    public function claudeCommand(): string
     {
-        return $this->resolved['codex']['command'];
+        return $this->resolved['claude']['command'];
     }
 
-    public function codexTurnTimeoutMs(): int
+    public function claudeTurnTimeoutMs(): int
     {
-        return $this->resolved['codex']['turn_timeout_ms'];
+        return $this->resolved['claude']['turn_timeout_ms'];
     }
 
-    public function codexStallTimeoutMs(): int
+    public function claudeStallTimeoutMs(): int
     {
-        return $this->resolved['codex']['stall_timeout_ms'];
+        return $this->resolved['claude']['stall_timeout_ms'];
     }
 
     public function toArray(): array
@@ -176,8 +176,5 @@ class WorkflowConfig
             throw new InvalidArgumentException('Missing required config: tracker.api_key');
         }
 
-        if (empty($this->resolved['codex']['command'])) {
-            throw new InvalidArgumentException('Missing required config: codex.command');
-        }
     }
 }

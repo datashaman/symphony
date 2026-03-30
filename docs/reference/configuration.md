@@ -46,13 +46,15 @@ String values support environment variable substitution: `$VAR` or `${VAR}`.
 | `agent.max_turns` | int | No | `20` | Maximum turns per agent session |
 | `agent.max_retry_backoff_ms` | int | No | `300000` | Maximum retry delay cap (ms) |
 
-## codex
+## claude
+
+The entire `claude` section is optional. Sensible defaults are provided.
 
 | Key | Type | Required | Default | Description |
 |-----|------|----------|---------|-------------|
-| `codex.command` | string | No | `claude -p --output-format stream-json` | Claude Code CLI command |
-| `codex.turn_timeout_ms` | int | No | `3600000` | Maximum wall-clock time per turn (ms) |
-| `codex.stall_timeout_ms` | int | No | `300000` | Maximum time without output before killing (ms) |
+| `claude.command` | string | No | `claude -p --output-format stream-json --worktree` | Claude Code CLI command |
+| `claude.turn_timeout_ms` | int | No | `3600000` | Maximum wall-clock time per turn (ms) |
+| `claude.stall_timeout_ms` | int | No | `300000` | Maximum time without output before killing (ms) |
 
 ## Complete Example
 
@@ -73,25 +75,9 @@ tracker:
 polling:
   interval_ms: 30000
 
-workspace:
-  root: /tmp/symphony_workspaces
-  hooks:
-    after_create:
-      - "git clone https://github.com/datashaman/my-project.git ."
-    before_run:
-      - "git pull origin main"
-
-hooks:
-  timeout_ms: 120000
-
 agent:
   max_concurrent_agents: 5
   max_turns: 20
   max_retry_backoff_ms: 300000
-
-codex:
-  command: "claude -p --output-format stream-json"
-  turn_timeout_ms: 3600000
-  stall_timeout_ms: 300000
 ---
 ```

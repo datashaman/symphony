@@ -52,7 +52,7 @@ Workflow files (e.g., `WORKFLOW.md`) contain YAML frontmatter with these section
 - `polling` - interval_ms (default: 30000)
 - `workspace` - root path, hooks (after_create, before_run, before_remove)
 - `agent` - max_concurrent_agents (default: 10), max_turns (default: 20)
-- `codex` - command, turn_timeout_ms (default: 3600000), stall_timeout_ms (default: 300000)
+- `claude` (optional) - command (default: `claude -p --output-format stream-json --worktree`), turn_timeout_ms (default: 3600000), stall_timeout_ms (default: 300000)
 
 ## When Updating Documentation
 

@@ -56,8 +56,8 @@ A typical lifecycle:
 
 Each turn has its own timeout enforcement:
 
-- **Turn timeout** (`codex.turn_timeout_ms`): Maximum wall-clock time for a single Claude Code invocation
-- **Stall timeout** (`codex.stall_timeout_ms`): Maximum time without any stdout output
+- **Turn timeout** (`claude.turn_timeout_ms`): Maximum wall-clock time for a single Claude Code invocation
+- **Stall timeout** (`claude.stall_timeout_ms`): Maximum time without any stdout output
 
 If either timeout fires, the Claude Code process is killed with SIGTERM and the turn counts as failed.
 

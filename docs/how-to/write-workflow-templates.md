@@ -13,7 +13,7 @@ A workflow file has two parts separated by `---` delimiters:
 <Twig prompt template>
 ```
 
-The YAML section configures the tracker, polling, workspace, agent, and codex settings. The template below the second `---` is rendered for each issue before being sent to Claude Code.
+The YAML section configures the tracker, polling, workspace, agent, and claude settings. The template below the second `---` is rendered for each issue before being sent to Claude Code.
 
 ## Available Template Variables
 

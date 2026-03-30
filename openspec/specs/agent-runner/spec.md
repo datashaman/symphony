@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Launch Claude Code via proc_open
-The system SHALL launch the Claude Code CLI using `proc_open()` with the configured `codex.command` (default: `claude -p --output-format stream-json`). The working directory SHALL be the workspace path. The prompt SHALL be written to stdin, then stdin SHALL be closed. Stdout SHALL be read line-by-line as streaming JSON.
+The system SHALL launch the Claude Code CLI using `proc_open()` with the configured `claude.command` (default: `claude -p --output-format stream-json --worktree`). The working directory SHALL be the workspace path. The prompt SHALL be written to stdin, then stdin SHALL be closed. Stdout SHALL be read line-by-line as streaming JSON.
 
 #### Scenario: Normal agent launch
 - **WHEN** the agent runner is invoked with a prompt and workspace path
@@ -23,7 +23,7 @@ The system SHALL parse each line of stdout as a JSON object. The system SHALL tr
 - **THEN** the system logs it at debug level and continues without error
 
 ### Requirement: Multi-turn support
-The system SHALL support multi-turn agent sessions. The first turn uses the full rendered prompt. Continuation turns SHALL use `claude -p --output-format stream-json --continue`. The system SHALL execute up to `agent.max_turns` turns per issue run.
+The system SHALL support multi-turn agent sessions. The first turn uses the full rendered prompt. Continuation turns SHALL use the configured command with `--continue` appended. The system SHALL execute up to `agent.max_turns` turns per issue run.
 
 #### Scenario: Continuation after first turn
 - **WHEN** the first turn completes normally and the issue still needs work
@@ -34,7 +34,7 @@ The system SHALL support multi-turn agent sessions. The first turn uses the full
 - **THEN** the system stops and returns the result without starting another turn
 
 ### Requirement: Timeout enforcement
-The system SHALL enforce `codex.turn_timeout_ms` (kill if turn exceeds limit) and `codex.stall_timeout_ms` (kill if no output received within window). Timeouts SHALL be implemented via non-blocking reads and `hrtime()` monotonic clock checks.
+The system SHALL enforce `claude.turn_timeout_ms` (kill if turn exceeds limit) and `claude.stall_timeout_ms` (kill if no output received within window). Timeouts SHALL be implemented via non-blocking reads and `hrtime()` monotonic clock checks.
 
 #### Scenario: Turn timeout
 - **WHEN** a turn runs longer than `turn_timeout_ms`

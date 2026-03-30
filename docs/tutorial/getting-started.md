@@ -51,22 +51,9 @@ tracker:
 polling:
   interval_ms: 30000
 
-workspace:
-  root: /tmp/symphony_workspaces
-  hooks:
-    after_create:
-      - "git clone https://github.com/your-username/your-repo.git ."
-    before_run:
-      - "git pull origin main"
-
 agent:
   max_concurrent_agents: 5
   max_turns: 20
-
-codex:
-  command: "claude -p --output-format stream-json"
-  turn_timeout_ms: 3600000
-  stall_timeout_ms: 300000
 ---
 
 You are working on issue {{ issue.identifier }}: {{ issue.title }}
@@ -80,7 +67,6 @@ This is retry attempt {{ attempt }}. Review what was done previously and continu
 
 Key things to change:
 - `tracker.repository` - your GitHub `owner/repo`
-- `workspace.hooks.after_create` - the git clone URL for your repo
 - `active_states` - the issue labels/states that Symphony should pick up (case-insensitive)
 
 ## Step 4: Create a Test Issue
@@ -120,10 +106,8 @@ kill $(pgrep -f "application run")
 1. Symphony reads `WORKFLOW.md` and resolves environment variables (`$GITHUB_TOKEN` becomes your actual token)
 2. On each tick (every 30 seconds by default), it queries the GitHub API for issues matching `active_states`
 3. For each eligible issue, it forks a child process that:
-   - Creates a workspace directory at `/tmp/symphony_workspaces/<issue-identifier>`
-   - Runs `after_create` hooks (e.g., `git clone`)
    - Renders the Twig prompt template with issue data
-   - Pipes the prompt to `claude -p --output-format stream-json`
+   - Launches `claude -p --output-format stream-json --worktree`, which creates a git worktree for isolation
    - If the agent fails, retries with `--continue` up to `max_turns` times
 4. The parent process monitors children, kills stalled workers, and retries failed issues with exponential backoff
 

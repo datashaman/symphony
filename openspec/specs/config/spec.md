@@ -11,9 +11,9 @@ The system SHALL provide typed getters for all configuration values with the fol
 - `agent.max_concurrent_agents`: default `10`
 - `agent.max_turns`: default `20`
 - `agent.max_retry_backoff_ms`: default `300000`
-- `codex.command`: default `"claude -p --output-format stream-json"`
-- `codex.turn_timeout_ms`: default `3600000`
-- `codex.stall_timeout_ms`: default `300000`
+- `claude.command`: default `"claude -p --output-format stream-json --worktree"`
+- `claude.turn_timeout_ms`: default `3600000`
+- `claude.stall_timeout_ms`: default `300000`
 
 #### Scenario: All defaults applied
 - **WHEN** config YAML provides only `tracker.kind: github` and `tracker.api_key: $GITHUB_TOKEN`
@@ -42,7 +42,7 @@ The system SHALL resolve `$VAR` and `${VAR}` patterns in string config values by
 The system SHALL validate at load time that:
 - `tracker.kind` is one of the supported tracker types
 - `tracker.api_key` is present and resolves to a non-empty value
-- `codex.command` is present
+- `claude.command` has a sensible default and is not required
 
 #### Scenario: Unsupported tracker kind
 - **WHEN** config specifies `tracker.kind: linear`

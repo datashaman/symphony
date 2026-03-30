@@ -63,7 +63,7 @@ it('initializes with empty state', function () {
     expect($orchestrator->getRunning())->toBe([]);
     expect($orchestrator->getClaimed())->toBe([]);
     expect($orchestrator->getRetryQueue())->toBe([]);
-    expect($orchestrator->getCodexTotals())->toBe([
+    expect($orchestrator->getClaudeTotals())->toBe([
         'input_tokens' => 0,
         'output_tokens' => 0,
         'seconds' => 0,

@@ -14,22 +14,9 @@ tracker:
 polling:
   interval_ms: 30000
 
-workspace:
-  root: /tmp/symphony_workspaces
-  hooks:
-    after_create:
-      - "git clone https://github.com/datashaman/my-project.git ."
-    before_run:
-      - "git pull origin main"
-
 agent:
   max_concurrent_agents: 5
   max_turns: 20
-
-codex:
-  command: "claude -p --output-format stream-json"
-  turn_timeout_ms: 3600000
-  stall_timeout_ms: 300000
 ---
 
 You are working on issue {{ issue.identifier }}: {{ issue.title }}

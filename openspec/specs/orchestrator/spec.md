@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: In-memory state tracking
-The system SHALL maintain orchestrator state in memory using: `running` (map of issueId to worker state), `claimed` (set of claimed issue IDs), `retryQueue` (map of issueId to retry state with attempt count, due time, and error), and `codexTotals` (accumulated input_tokens, output_tokens, seconds).
+The system SHALL maintain orchestrator state in memory using: `running` (map of issueId to worker state), `claimed` (set of claimed issue IDs), `retryQueue` (map of issueId to retry state with attempt count, due time, and error), and `claudeTotals` (accumulated input_tokens, output_tokens, seconds).
 
 #### Scenario: State initialized on startup
 - **WHEN** the orchestrator starts
-- **THEN** all state maps are empty and codexTotals are zeroed
+- **THEN** all state maps are empty and claudeTotals are zeroed
 
 ### Requirement: Poll tick sequence
 Each poll tick SHALL execute in order: (1) reconcile running issues, (2) validate/reload dispatch config, (3) fetch candidates from tracker, (4) sort by priority ASC then createdAt ASC then identifier ASC, (5) filter eligible issues (not running, not claimed, concurrency slots available, no active blockers), (6) dispatch each eligible issue while slots remain, (7) sleep until next tick.

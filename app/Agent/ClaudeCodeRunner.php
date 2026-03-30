@@ -20,7 +20,7 @@ class ClaudeCodeRunner
      */
     public function runTurn(string $prompt, string $workspacePath, bool $isContinuation = false): array
     {
-        $command = $this->config->codexCommand();
+        $command = $this->config->claudeCommand();
 
         if ($isContinuation) {
             $command .= ' --continue';
@@ -56,8 +56,8 @@ class ClaudeCodeRunner
 
         $startTime = hrtime(true);
         $lastActivity = hrtime(true);
-        $turnTimeoutMs = $this->config->codexTurnTimeoutMs();
-        $stallTimeoutMs = $this->config->codexStallTimeoutMs();
+        $turnTimeoutMs = $this->config->claudeTurnTimeoutMs();
+        $stallTimeoutMs = $this->config->claudeStallTimeoutMs();
         $stdout = '';
         $stderr = '';
 
