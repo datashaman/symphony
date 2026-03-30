@@ -6,3 +6,4 @@
 /builds
 /symphony.log
 /vendor
+/.symphony_session_id
