@@ -11,27 +11,28 @@ use RuntimeException;
 class WorkspaceManager
 {
     private string $root;
+    private string $repoRoot;
+    private string $baseBranch;
 
     public function __construct(
         private WorkflowConfig $config,
         private LoggerInterface $logger,
     ) {
-        $this->root = $config->workspaceRoot();
+        $this->repoRoot = $this->detectRepoRoot();
+        $this->baseBranch = $this->detectBaseBranch();
+        $this->root = $config->workspaceRoot() ?: $this->repoRoot . '/.symphony-worktrees';
     }
 
     public function pathForIssue(Issue $issue): string
     {
-        $key = preg_replace('/[^A-Za-z0-9._-]/', '_', $issue->identifier);
+        $key = preg_replace('/[^A-Za-z0-9._-]/', '_', $issue->branchName);
         $path = $this->root . '/' . $key;
 
-        // Ensure workspace root exists for realpath check
         if (!is_dir($this->root)) {
             mkdir($this->root, 0755, true);
         }
 
         $realRoot = realpath($this->root);
-        // Check for traversal: the computed path must be under root
-        // We check the resolved parent since the workspace dir might not exist yet
         $parentDir = dirname($path);
         if (!is_dir($parentDir)) {
             mkdir($parentDir, 0755, true);
@@ -50,9 +51,23 @@ class WorkspaceManager
     public function create(Issue $issue): string
     {
         $path = $this->pathForIssue($issue);
+        $branch = $issue->branchName;
 
         if (!is_dir($path)) {
-            mkdir($path, 0755, true);
+            if ($this->branchExists($branch)) {
+                $this->logger->info('Creating worktree with existing branch', [
+                    'branch' => $branch,
+                    'path' => $path,
+                ]);
+                $this->git("worktree add {$this->escape($path)} {$this->escape($branch)}");
+            } else {
+                $this->logger->info('Creating worktree with new branch', [
+                    'branch' => $branch,
+                    'base' => $this->baseBranch,
+                    'path' => $path,
+                ]);
+                $this->git("worktree add {$this->escape($path)} -b {$this->escape($branch)} {$this->escape($this->baseBranch)}");
+            }
         }
 
         $hooks = $this->config->workspaceHooks();
@@ -68,10 +83,7 @@ class WorkspaceManager
     public function remove(Issue $issue): void
     {
         $path = $this->pathForIssue($issue);
-
-        if (!is_dir($path)) {
-            return;
-        }
+        $branch = $issue->branchName;
 
         $hooks = $this->config->workspaceHooks();
         if (isset($hooks['before_remove'])) {
@@ -84,7 +96,15 @@ class WorkspaceManager
             }
         }
 
-        $this->recursiveDelete($path);
+        // Remove worktree
+        if (is_dir($path)) {
+            $this->gitSafe("worktree remove --force {$this->escape($path)}");
+        } else {
+            $this->gitSafe('worktree prune');
+        }
+
+        // Delete the branch
+        $this->gitSafe("branch -D {$this->escape($branch)}");
     }
 
     public function runHook(string $phase, string $command, string $workspacePath): void
@@ -119,7 +139,6 @@ class WorkspaceManager
         while (true) {
             $status = proc_get_status($process);
             if (!$status['running']) {
-                // Read remaining output
                 $stdout .= stream_get_contents($pipes[1]);
                 $stderr .= stream_get_contents($pipes[2]);
                 break;
@@ -127,7 +146,7 @@ class WorkspaceManager
 
             $elapsedMs = (hrtime(true) - $startTime) / 1_000_000;
             if ($elapsedMs > $timeoutMs) {
-                proc_terminate($process, 15); // SIGTERM
+                proc_terminate($process, 15);
                 fclose($pipes[1]);
                 fclose($pipes[2]);
                 proc_close($process);
@@ -139,7 +158,7 @@ class WorkspaceManager
 
             $stdout .= stream_get_contents($pipes[1]);
             $stderr .= stream_get_contents($pipes[2]);
-            usleep(10000); // 10ms
+            usleep(10000);
         }
 
         fclose($pipes[1]);
@@ -183,54 +202,88 @@ class WorkspaceManager
             'count' => count($workspaceDirs),
         ]);
 
-        // We need issue IDs from workspace directory names to check states
-        // The workspace key IS the sanitized identifier, so we pass them as IDs
-        $ids = array_values($workspaceDirs);
-        $states = $tracker->fetchStatesByIds($ids);
-        $terminalStates = array_map('strtolower', $this->config->trackerTerminalStates());
+        // Worktree dirs are named after the sanitized branchName.
+        // We can't reverse-map to issue IDs reliably, so just prune
+        // stale worktree references and leave cleanup to manual removal
+        // or when the issue is re-fetched during a tick.
+        $this->gitSafe('worktree prune');
+    }
 
-        foreach ($states as $id => $state) {
-            if (in_array(strtolower($state), $terminalStates, true)) {
-                $path = $this->root . '/' . $id;
-                $this->logger->info("Cleaning up terminal workspace: {$id}", [
-                    'state' => $state,
-                ]);
+    private function detectRepoRoot(): string
+    {
+        $result = trim(shell_exec('git rev-parse --show-toplevel 2>/dev/null') ?? '');
 
-                $hooks = $this->config->workspaceHooks();
-                if (isset($hooks['before_remove'])) {
-                    foreach ((array) $hooks['before_remove'] as $command) {
-                        try {
-                            $this->runHook('before_remove', $command, $path);
-                        } catch (RuntimeException $e) {
-                            $this->logger->warning("before_remove hook failed during cleanup: {$e->getMessage()}");
-                        }
-                    }
-                }
+        if ($result === '') {
+            throw new RuntimeException(
+                'Symphony must be run from within a git repository'
+            );
+        }
 
-                $this->recursiveDelete($path);
-            }
+        return $result;
+    }
+
+    private function detectBaseBranch(): string
+    {
+        // Try origin/HEAD
+        $ref = trim(shell_exec("git -C {$this->escape($this->repoRoot)} symbolic-ref refs/remotes/origin/HEAD 2>/dev/null") ?? '');
+        if ($ref !== '') {
+            return basename($ref);
+        }
+
+        // Fallback: check for main, then master
+        $exitCode = 0;
+        exec("git -C {$this->escape($this->repoRoot)} show-ref --verify --quiet refs/heads/main 2>/dev/null", $output, $exitCode);
+        if ($exitCode === 0) {
+            return 'main';
+        }
+
+        exec("git -C {$this->escape($this->repoRoot)} show-ref --verify --quiet refs/heads/master 2>/dev/null", $output, $exitCode);
+        if ($exitCode === 0) {
+            return 'master';
+        }
+
+        throw new RuntimeException('Cannot detect base branch (tried origin/HEAD, main, master)');
+    }
+
+    private function branchExists(string $branch): bool
+    {
+        $exitCode = 0;
+        exec("git -C {$this->escape($this->repoRoot)} show-ref --verify --quiet refs/heads/{$this->escape($branch)} 2>/dev/null", $output, $exitCode);
+
+        return $exitCode === 0;
+    }
+
+    private function git(string $args): string
+    {
+        $command = "git -C {$this->escape($this->repoRoot)} {$args} 2>&1";
+        $output = [];
+        $exitCode = 0;
+        exec($command, $output, $exitCode);
+
+        if ($exitCode !== 0) {
+            throw new RuntimeException("git {$args} failed (exit {$exitCode}): " . implode("\n", $output));
+        }
+
+        return implode("\n", $output);
+    }
+
+    private function gitSafe(string $args): void
+    {
+        $command = "git -C {$this->escape($this->repoRoot)} {$args} 2>&1";
+        $output = [];
+        $exitCode = 0;
+        exec($command, $output, $exitCode);
+
+        if ($exitCode !== 0) {
+            $this->logger->debug("git {$args} failed (non-fatal)", [
+                'exit_code' => $exitCode,
+                'output' => implode("\n", $output),
+            ]);
         }
     }
 
-    private function recursiveDelete(string $path): void
+    private function escape(string $arg): string
     {
-        if (!is_dir($path)) {
-            return;
-        }
-
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($items as $item) {
-            if ($item->isDir()) {
-                rmdir($item->getPathname());
-            } else {
-                unlink($item->getPathname());
-            }
-        }
-
-        rmdir($path);
+        return escapeshellarg($arg);
     }
 }

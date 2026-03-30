@@ -32,9 +32,7 @@ class ClaudeCodeRunner
             2 => ['pipe', 'w'], // stderr
         ];
 
-        // Use CWD as working directory — --worktree handles isolation
-        $cwd = str_contains($command, '--worktree') ? getcwd() : $workspacePath;
-        $process = proc_open($command, $descriptors, $pipes, $cwd);
+        $process = proc_open($command, $descriptors, $pipes, $workspacePath);
 
         if (!is_resource($process)) {
             throw new RuntimeException("Failed to launch Claude Code: {$command}");
@@ -143,6 +141,7 @@ class ClaudeCodeRunner
     public function run(string $prompt, string $workspacePath): array
     {
         $maxTurns = $this->config->maxTurns();
+
         $totalTokens = ['input_tokens' => 0, 'output_tokens' => 0];
         $sessionId = null;
         $success = false;
