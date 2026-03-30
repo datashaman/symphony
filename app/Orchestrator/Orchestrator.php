@@ -15,7 +15,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class Orchestrator
 {
-    /** @var array<string, array{pid: int, issue: Issue, stage: ?StageConfig, startedAt: int, lastActivity: int}> */
+    /** @var array<string, array{pid: int, issue: Issue, stage: ?StageConfig, startedAt: int}> */
     private array $running = [];
 
     /** @var array<string, true> */
@@ -247,7 +247,6 @@ class Orchestrator
             'issue' => $issue,
             'stage' => $stage,
             'startedAt' => $now,
-            'lastActivity' => $now,
         ];
 
         $claimKey = $stage ? $issue->id.':'.$stage->name : $issue->id;
@@ -306,8 +305,6 @@ class Orchestrator
             return;
         }
 
-        $stallTimeoutMs = $this->config->claudeStallTimeoutMs();
-        $nowNs = hrtime(true);
         $finishedIds = [];
 
         foreach ($this->running as $issueId => $worker) {
@@ -337,20 +334,6 @@ class Orchestrator
                 }
 
                 continue;
-            }
-
-            // Check for stall
-            $stallMs = ($nowNs - $worker['lastActivity']) / 1_000_000;
-            if ($stallMs > $stallTimeoutMs) {
-                $this->logger->warning('Worker stalled, killing', [
-                    'issue_id' => $issueId,
-                    'pid' => $worker['pid'],
-                    'stall_ms' => $stallMs,
-                ]);
-
-                posix_kill($worker['pid'], SIGTERM);
-                $finishedIds[] = $issueId;
-                $this->queueRetry($issueId, 'stall');
             }
         }
 

@@ -33,8 +33,6 @@ interface TrackerInterface
      * built-in workflow statuses (e.g., Jira).
      *
      * @param  string[]  $extraLabels  Additional labels to ensure (e.g., pipeline stage triggers)
-     */
-    /**
      * @return string[] Labels that were created
      */
     public function ensureLabels(array $extraLabels = []): array;
