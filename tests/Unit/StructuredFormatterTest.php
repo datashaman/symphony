@@ -16,7 +16,7 @@ function makeLogRecord(string $message, Level $level = Level::Info, array $conte
 }
 
 it('formats basic log entry as key=value pairs', function () {
-    $formatter = new StructuredFormatter();
+    $formatter = new StructuredFormatter;
     $record = makeLogRecord('issue dispatched');
     $output = $formatter->format($record);
 
@@ -26,7 +26,7 @@ it('formats basic log entry as key=value pairs', function () {
 });
 
 it('includes context fields when available', function () {
-    $formatter = new StructuredFormatter();
+    $formatter = new StructuredFormatter;
     $record = makeLogRecord('processing', context: [
         'issue_id' => '42',
         'issue_identifier' => 'symphony#42',
@@ -40,7 +40,7 @@ it('includes context fields when available', function () {
 });
 
 it('omits missing optional fields', function () {
-    $formatter = new StructuredFormatter();
+    $formatter = new StructuredFormatter;
     $record = makeLogRecord('startup', context: [
         'issue_id' => '42',
     ]);
@@ -52,7 +52,7 @@ it('omits missing optional fields', function () {
 });
 
 it('redacts sensitive values', function () {
-    $formatter = new StructuredFormatter();
+    $formatter = new StructuredFormatter;
     $record = makeLogRecord('config loaded', context: [
         'api_key' => 'ghp_secret123',
         'api_token' => 'tok_abc',
@@ -67,7 +67,7 @@ it('redacts sensitive values', function () {
 });
 
 it('handles different log levels', function () {
-    $formatter = new StructuredFormatter();
+    $formatter = new StructuredFormatter;
 
     $warning = $formatter->format(makeLogRecord('something bad', Level::Warning));
     expect($warning)->toContain('level=warning');

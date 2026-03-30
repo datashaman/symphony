@@ -1,9 +1,10 @@
 <?php
 
 use App\Prompt\PromptBuilder;
+use Twig\Error\RuntimeError;
 
 it('renders prompt with issue context', function () {
-    $builder = new PromptBuilder();
+    $builder = new PromptBuilder;
 
     $result = $builder->render(
         'Fix {{ issue.identifier }}: {{ issue.title }}',
@@ -14,16 +15,16 @@ it('renders prompt with issue context', function () {
 });
 
 it('throws on undefined variable', function () {
-    $builder = new PromptBuilder();
+    $builder = new PromptBuilder;
 
     $builder->render(
         '{{ issue.nonexistent_field }}',
         ['identifier' => 'test'],
     );
-})->throws(\Twig\Error\RuntimeError::class);
+})->throws(RuntimeError::class);
 
 it('converts DateTime fields to ISO-8601 strings', function () {
-    $builder = new PromptBuilder();
+    $builder = new PromptBuilder;
 
     $result = $builder->render(
         'Created: {{ issue.createdAt }}',
@@ -34,7 +35,7 @@ it('converts DateTime fields to ISO-8601 strings', function () {
 });
 
 it('passes attempt as null for first attempt', function () {
-    $builder = new PromptBuilder();
+    $builder = new PromptBuilder;
 
     $result = $builder->render(
         '{% if attempt %}Retry attempt {{ attempt }}{% else %}First try{% endif %}',
@@ -46,7 +47,7 @@ it('passes attempt as null for first attempt', function () {
 });
 
 it('passes attempt as integer for retries', function () {
-    $builder = new PromptBuilder();
+    $builder = new PromptBuilder;
 
     $result = $builder->render(
         '{% if attempt %}Retry attempt {{ attempt }}{% endif %}',

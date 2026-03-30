@@ -23,11 +23,12 @@ class ClaudeCodeRunner
     /**
      * Run a single turn of the Claude Code agent.
      *
+     * @param  array{command?: string, turn_timeout_ms?: int, stall_timeout_ms?: int}  $overrides
      * @return array{success: bool, tokens: array{input_tokens: int, output_tokens: int}, session_id: string|null}
      */
-    public function runTurn(string $prompt, string $workspacePath, bool $isContinuation = false): array
+    public function runTurn(string $prompt, string $workspacePath, bool $isContinuation = false, array $overrides = []): array
     {
-        $command = $this->config->claudeCommand();
+        $command = $overrides['command'] ?? $this->config->claudeCommand();
 
         if ($isContinuation) {
             $command .= ' --continue';
@@ -41,12 +42,12 @@ class ClaudeCodeRunner
 
         $process = proc_open($command, $descriptors, $pipes, $workspacePath);
 
-        if (!is_resource($process)) {
+        if (! is_resource($process)) {
             throw new RuntimeException("Failed to launch Claude Code: {$command}");
         }
 
         // Write prompt and close stdin
-        if (!$isContinuation) {
+        if (! $isContinuation) {
             fwrite($pipes[0], $prompt);
         }
         fclose($pipes[0]);
@@ -63,8 +64,8 @@ class ClaudeCodeRunner
 
         $startTime = hrtime(true);
         $lastActivity = hrtime(true);
-        $turnTimeoutMs = $this->config->claudeTurnTimeoutMs();
-        $stallTimeoutMs = $this->config->claudeStallTimeoutMs();
+        $turnTimeoutMs = $overrides['turn_timeout_ms'] ?? $this->config->claudeTurnTimeoutMs();
+        $stallTimeoutMs = $overrides['stall_timeout_ms'] ?? $this->config->claudeStallTimeoutMs();
         $stdout = '';
         $stderr = '';
 
@@ -87,7 +88,7 @@ class ClaudeCodeRunner
                 $stderr .= $errChunk;
             }
 
-            if (!$status['running']) {
+            if (! $status['running']) {
                 // Read remaining
                 $remaining = stream_get_contents($pipes[1]);
                 if ($remaining) {
@@ -143,11 +144,12 @@ class ClaudeCodeRunner
     /**
      * Run multi-turn agent session.
      *
+     * @param  array{command?: string, max_turns?: int, turn_timeout_ms?: int, stall_timeout_ms?: int}  $overrides
      * @return array{success: bool, tokens: array{input_tokens: int, output_tokens: int}, session_id: string|null}
      */
-    public function run(string $prompt, string $workspacePath): array
+    public function run(string $prompt, string $workspacePath, array $overrides = []): array
     {
-        $maxTurns = $this->config->maxTurns();
+        $maxTurns = $overrides['max_turns'] ?? $this->config->maxTurns();
 
         $totalTokens = ['input_tokens' => 0, 'output_tokens' => 0];
         $sessionId = null;
@@ -162,7 +164,7 @@ class ClaudeCodeRunner
                 'continuation' => $isContinuation,
             ]);
 
-            $result = $this->runTurn($prompt, $workspacePath, $isContinuation);
+            $result = $this->runTurn($prompt, $workspacePath, $isContinuation, $overrides);
 
             $totalTokens['input_tokens'] += $result['tokens']['input_tokens'];
             $totalTokens['output_tokens'] += $result['tokens']['output_tokens'];
@@ -247,7 +249,7 @@ class ClaudeCodeRunner
                             'Write' => $input['file_path'] ?? '',
                             'Bash' => mb_strimwidth($input['command'] ?? '', 0, 120, '...'),
                             'Glob' => $input['pattern'] ?? '',
-                            'Grep' => ($input['pattern'] ?? '') . ' ' . ($input['path'] ?? ''),
+                            'Grep' => ($input['pattern'] ?? '').' '.($input['path'] ?? ''),
                             default => '',
                         };
                         $this->logger->info("Tool: {$toolName}", ['detail' => $summary]);

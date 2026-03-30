@@ -1,5 +1,7 @@
 <?php
 
+use Tests\TestCase;
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -11,8 +13,8 @@
 |
 */
 
-uses(Tests\TestCase::class)->in('Feature');
-uses(Tests\TestCase::class)->in('Unit/GitHubTrackerTest.php', 'Unit/JiraTrackerTest.php');
+uses(TestCase::class)->in('Feature');
+uses(TestCase::class)->in('Unit/GitHubTrackerTest.php', 'Unit/JiraTrackerTest.php');
 
 /*
 |--------------------------------------------------------------------------

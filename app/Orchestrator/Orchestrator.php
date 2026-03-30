@@ -3,6 +3,7 @@
 namespace App\Orchestrator;
 
 use App\Agent\ClaudeCodeRunner;
+use App\Config\StageConfig;
 use App\Config\WorkflowConfig;
 use App\Prompt\PromptBuilder;
 use App\Tracker\Issue;
@@ -14,7 +15,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class Orchestrator
 {
-    /** @var array<string, array{pid: int, issue: Issue, startedAt: int, lastActivity: int}> */
+    /** @var array<string, array{pid: int, issue: Issue, stage: ?StageConfig, startedAt: int, lastActivity: int}> */
     private array $running = [];
 
     /** @var array<string, true> */
@@ -64,7 +65,7 @@ class Orchestrator
 
         // Ensure configured labels exist on the tracker
         try {
-            $created = $this->tracker->ensureLabels();
+            $created = $this->tracker->ensureLabels($this->config->pipelineTriggerLabels());
             if (!empty($created)) {
                 $this->console('  Created labels: ' . implode(', ', $created));
             }
@@ -76,7 +77,7 @@ class Orchestrator
         // Startup cleanup
         $this->workspace->cleanupTerminal($this->tracker);
 
-        while (!$this->shutdown) {
+        while (! $this->shutdown) {
             $this->tick();
 
             $sleepMs = $this->config->pollingIntervalMs();
@@ -130,19 +131,19 @@ class Orchestrator
         if (count($eligible) > 0) {
             $this->logger->info('Eligible issues', [
                 'count' => count($eligible),
-                'issues' => array_map(fn(Issue $i) => $i->identifier, $eligible),
+                'issues' => array_map(fn (array $e) => $e['issue']->identifier.($e['stage'] ? ":{$e['stage']->name}" : ''), $eligible),
             ]);
         }
 
         // 6. Dispatch
         $availableSlots = $this->config->maxConcurrentAgents() - count($this->running);
 
-        foreach ($eligible as $issue) {
+        foreach ($eligible as $entry) {
             if ($availableSlots <= 0) {
                 break;
             }
 
-            $this->dispatch($issue);
+            $this->dispatch($entry['issue'], $entry['stage']);
             $availableSlots--;
         }
 
@@ -151,13 +152,14 @@ class Orchestrator
     }
 
     /**
-     * @param Issue[] $candidates
-     * @return Issue[]
+     * @param  Issue[]  $candidates
+     * @return array<array{issue: Issue, stage: ?StageConfig}>
      */
     private function filterEligible(array $candidates): array
     {
         $eligible = [];
         $activeStates = array_map('strtolower', $this->config->trackerActiveStates());
+        $hasPipeline = $this->config->hasPipeline();
 
         foreach ($candidates as $issue) {
             // Skip if already running
@@ -165,9 +167,22 @@ class Orchestrator
                 continue;
             }
 
-            // Skip if claimed
-            if (isset($this->claimed[$issue->id])) {
-                continue;
+            // Skip if claimed (for pipeline: claimed includes stage suffix)
+            if ($hasPipeline) {
+                $stage = $this->config->stageForLabels($issue->labels);
+                if ($stage === null) {
+                    // No matching stage trigger label — skip
+                    continue;
+                }
+                $claimKey = $issue->id.':'.$stage->name;
+                if (isset($this->claimed[$claimKey])) {
+                    continue;
+                }
+            } else {
+                $stage = null;
+                if (isset($this->claimed[$issue->id])) {
+                    continue;
+                }
             }
 
             // Skip if in retry queue and not yet due
@@ -179,7 +194,7 @@ class Orchestrator
             }
 
             // Skip if has active blockers
-            if (!empty($issue->blockedBy)) {
+            if (! empty($issue->blockedBy)) {
                 $blockerStates = $this->tracker->fetchStatesByIds($issue->blockedBy);
                 $hasActiveBlocker = false;
                 foreach ($blockerStates as $state) {
@@ -193,18 +208,20 @@ class Orchestrator
                 }
             }
 
-            $eligible[] = $issue;
+            $eligible[] = ['issue' => $issue, 'stage' => $stage];
         }
 
         return $eligible;
     }
 
-    private function dispatch(Issue $issue): void
+    private function dispatch(Issue $issue, ?StageConfig $stage = null): void
     {
-        $this->console("  <info>Dispatching</info> {$issue->identifier}: {$issue->title}");
+        $label = $stage ? "{$issue->identifier}:{$stage->name}" : $issue->identifier;
+        $this->console("  <info>Dispatching</info> {$label}: {$issue->title}");
         $this->logger->info('Dispatching issue', [
             'issue_id' => $issue->id,
             'issue_identifier' => $issue->identifier,
+            'stage' => $stage?->name,
         ]);
 
         $pid = pcntl_fork();
@@ -219,7 +236,7 @@ class Orchestrator
 
         if ($pid === 0) {
             // Child process
-            $exitCode = $this->runChild($issue);
+            $exitCode = $this->runChild($issue, $stage);
             exit($exitCode);
         }
 
@@ -228,29 +245,44 @@ class Orchestrator
         $this->running[$issue->id] = [
             'pid' => $pid,
             'issue' => $issue,
+            'stage' => $stage,
             'startedAt' => $now,
             'lastActivity' => $now,
         ];
-        $this->claimed[$issue->id] = true;
+
+        $claimKey = $stage ? $issue->id.':'.$stage->name : $issue->id;
+        $this->claimed[$claimKey] = true;
     }
 
-    private function runChild(Issue $issue): int
+    private function runChild(Issue $issue, ?StageConfig $stage = null): int
     {
         try {
             // Create workspace
             $workspacePath = $this->workspace->create($issue);
 
-            // Build prompt
+            // Build prompt — use stage-specific prompt if in pipeline mode
             $attempt = $this->retryQueue[$issue->id]['attempt'] ?? null;
-            $workflow = $this->workflowLoader->load();
-            $prompt = $this->promptBuilder->render($workflow['prompt'], $issue->toArray(), $attempt);
+            $promptTemplate = $stage?->prompt ?? $this->workflowLoader->load()['prompt'];
+            $prompt = $this->promptBuilder->render($promptTemplate, $issue->toArray(), $attempt);
+
+            // Build overrides from stage config
+            $overrides = [];
+            if ($stage) {
+                $overrides = [
+                    'command' => $stage->command,
+                    'max_turns' => $stage->maxTurns,
+                    'turn_timeout_ms' => $stage->turnTimeoutMs,
+                    'stall_timeout_ms' => $stage->stallTimeoutMs,
+                ];
+            }
 
             // Run agent
-            $result = $this->agentRunner->run($prompt, $workspacePath);
+            $result = $this->agentRunner->run($prompt, $workspacePath, $overrides);
 
             $this->logger->info('Agent completed', [
                 'issue_id' => $issue->id,
                 'issue_identifier' => $issue->identifier,
+                'stage' => $stage?->name,
                 'success' => $result['success'],
                 'tokens' => $result['tokens'],
                 'session_id' => $result['session_id'],
@@ -260,6 +292,7 @@ class Orchestrator
         } catch (\Throwable $e) {
             $this->logger->error('Child process failed', [
                 'issue_id' => $issue->id,
+                'stage' => $stage?->name,
                 'error' => $e->getMessage(),
             ]);
 
@@ -327,14 +360,14 @@ class Orchestrator
         }
 
         // Tracker state refresh for remaining running issues
-        if (!empty($this->running)) {
+        if (! empty($this->running)) {
             $ids = array_keys($this->running);
             $states = $this->tracker->fetchStatesByIds($ids);
             $terminalStates = array_map('strtolower', $this->config->trackerTerminalStates());
             $activeStates = array_map('strtolower', $this->config->trackerActiveStates());
 
             foreach ($states as $id => $state) {
-                if (!isset($this->running[$id])) {
+                if (! isset($this->running[$id])) {
                     continue;
                 }
 
@@ -348,15 +381,17 @@ class Orchestrator
                     ]);
                     posix_kill($this->running[$id]['pid'], SIGTERM);
                     $this->workspace->remove($this->running[$id]['issue']);
-                    unset($this->running[$id], $this->claimed[$id]);
-                } elseif (!in_array($stateLower, $activeStates, true)) {
+                    $this->unclaimWorker($id);
+                    unset($this->running[$id]);
+                } elseif (! in_array($stateLower, $activeStates, true)) {
                     // Non-active, non-terminal: kill but preserve workspace
                     $this->logger->info('Issue moved to non-active state, killing worker', [
                         'issue_id' => $id,
                         'state' => $state,
                     ]);
                     posix_kill($this->running[$id]['pid'], SIGTERM);
-                    unset($this->running[$id], $this->claimed[$id]);
+                    $this->unclaimWorker($id);
+                    unset($this->running[$id]);
                 }
             }
         }
@@ -391,6 +426,16 @@ class Orchestrator
         ]);
     }
 
+    private function unclaimWorker(string $issueId): void
+    {
+        $worker = $this->running[$issueId] ?? null;
+        if ($worker && $worker['stage']) {
+            unset($this->claimed[$issueId.':'.$worker['stage']->name]);
+        } else {
+            unset($this->claimed[$issueId]);
+        }
+    }
+
     private function processRetryQueue(): void
     {
         $now = hrtime(true);
@@ -398,7 +443,18 @@ class Orchestrator
         foreach ($this->retryQueue as $issueId => $retryState) {
             if ($now >= $retryState['dueAt']) {
                 unset($this->retryQueue[$issueId]);
-                unset($this->claimed[$issueId]);
+                $this->unclaimByIssueId($issueId);
+            }
+        }
+    }
+
+    private function unclaimByIssueId(string $issueId): void
+    {
+        // Remove all claims for this issue (both plain and stage-suffixed)
+        unset($this->claimed[$issueId]);
+        foreach (array_keys($this->claimed) as $key) {
+            if (str_starts_with($key, $issueId.':')) {
+                unset($this->claimed[$key]);
             }
         }
     }
@@ -416,7 +472,7 @@ class Orchestrator
 
     private function waitForChildren(): void
     {
-        while (!empty($this->running)) {
+        while (! empty($this->running)) {
             foreach ($this->running as $issueId => $worker) {
                 $status = pcntl_waitpid($worker['pid'], $childStatus, WNOHANG);
                 if ($status > 0) {
@@ -427,7 +483,7 @@ class Orchestrator
                 }
             }
 
-            if (!empty($this->running)) {
+            if (! empty($this->running)) {
                 usleep(100000); // 100ms
             }
         }
@@ -439,7 +495,7 @@ class Orchestrator
         $slept = 0;
         $step = 100000; // 100ms steps to check shutdown
 
-        while ($slept < $intervalUs && !$this->shutdown) {
+        while ($slept < $intervalUs && ! $this->shutdown) {
             $remaining = $intervalUs - $slept;
             $sleepTime = min($step, $remaining);
             usleep($sleepTime);

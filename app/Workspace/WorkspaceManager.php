@@ -11,7 +11,9 @@ use RuntimeException;
 class WorkspaceManager
 {
     private string $root;
+
     private string $repoRoot;
+
     private string $baseBranch;
 
     public function __construct(
@@ -20,32 +22,32 @@ class WorkspaceManager
     ) {
         $this->repoRoot = $this->detectRepoRoot();
         $this->baseBranch = $this->detectBaseBranch();
-        $this->root = $config->workspaceRoot() ?: $this->repoRoot . '/.symphony/worktrees';
+        $this->root = $config->workspaceRoot() ?: $this->repoRoot.'/.symphony/worktrees';
     }
 
     public function pathForIssue(Issue $issue): string
     {
         $key = preg_replace('/[^A-Za-z0-9._-]/', '-', $issue->identifier);
-        $path = $this->root . '/' . $key;
+        $path = $this->root.'/'.$key;
 
-        if (!is_dir($this->root)) {
+        if (! is_dir($this->root)) {
             mkdir($this->root, 0755, true);
         }
 
         $realRoot = realpath($this->root);
         $parentDir = dirname($path);
-        if (!is_dir($parentDir)) {
+        if (! is_dir($parentDir)) {
             mkdir($parentDir, 0755, true);
         }
         $realParent = realpath($parentDir);
 
-        if ($realParent === false || !str_starts_with($realParent, $realRoot)) {
+        if ($realParent === false || ! str_starts_with($realParent, $realRoot)) {
             throw new RuntimeException(
-                "Path traversal detected: workspace path escapes root directory"
+                'Path traversal detected: workspace path escapes root directory'
             );
         }
 
-        return $realRoot . '/' . $key;
+        return $realRoot.'/'.$key;
     }
 
     public function create(Issue $issue): string
@@ -76,6 +78,7 @@ class WorkspaceManager
                         'branch' => $branch,
                         'path' => $existingPath,
                     ]);
+
                     return $existingPath;
                 }
 
@@ -144,7 +147,7 @@ class WorkspaceManager
 
         $process = proc_open($command, $descriptors, $pipes, $workspacePath);
 
-        if (!is_resource($process)) {
+        if (! is_resource($process)) {
             throw new RuntimeException("Failed to start hook process: {$command}");
         }
 
@@ -160,7 +163,7 @@ class WorkspaceManager
 
         while (true) {
             $status = proc_get_status($process);
-            if (!$status['running']) {
+            if (! $status['running']) {
                 $stdout .= stream_get_contents($pipes[1]);
                 $stderr .= stream_get_contents($pipes[2]);
                 break;
@@ -207,7 +210,7 @@ class WorkspaceManager
     {
         $this->gitSafe('worktree prune');
 
-        if (!is_dir($this->root)) {
+        if (! is_dir($this->root)) {
             return;
         }
 
@@ -271,7 +274,7 @@ class WorkspaceManager
                 $current = ['path' => substr($line, 9), 'branch' => null];
             } elseif (str_starts_with($line, 'branch ')) {
                 $current['branch'] = basename(substr($line, 7));
-            } elseif ($line === '' && !empty($current)) {
+            } elseif ($line === '' && ! empty($current)) {
                 // Only include worktrees under our root
                 if (isset($current['path']) && str_starts_with($current['path'], $this->root)) {
                     $worktrees[] = $current;
@@ -281,7 +284,7 @@ class WorkspaceManager
         }
 
         // Handle last entry (no trailing newline)
-        if (!empty($current) && isset($current['path']) && str_starts_with($current['path'], $this->root)) {
+        if (! empty($current) && isset($current['path']) && str_starts_with($current['path'], $this->root)) {
             $worktrees[] = $current;
         }
 
@@ -378,7 +381,7 @@ class WorkspaceManager
         exec($command, $output, $exitCode);
 
         if ($exitCode !== 0) {
-            throw new RuntimeException("git {$args} failed (exit {$exitCode}): " . implode("\n", $output));
+            throw new RuntimeException("git {$args} failed (exit {$exitCode}): ".implode("\n", $output));
         }
 
         return implode("\n", $output);

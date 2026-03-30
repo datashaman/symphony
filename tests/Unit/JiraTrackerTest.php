@@ -48,7 +48,7 @@ it('fetches candidate issues via JQL', function () {
         ]),
     ]);
 
-    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(1);
@@ -63,7 +63,7 @@ it('handles pagination with startAt/maxResults', function () {
         'jira.example.com/rest/api/3/search*' => Http::sequence()
             ->push([
                 'total' => 60,
-                'issues' => array_map(fn($i) => [
+                'issues' => array_map(fn ($i) => [
                     'id' => (string) $i,
                     'key' => "PROJ-{$i}",
                     'self' => '',
@@ -81,7 +81,7 @@ it('handles pagination with startAt/maxResults', function () {
             ])
             ->push([
                 'total' => 60,
-                'issues' => array_map(fn($i) => [
+                'issues' => array_map(fn ($i) => [
                     'id' => (string) $i,
                     'key' => "PROJ-{$i}",
                     'self' => '',
@@ -99,7 +99,7 @@ it('handles pagination with startAt/maxResults', function () {
             ]),
     ]);
 
-    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(60);
@@ -134,7 +134,7 @@ it('extracts blocked-by from issue links', function () {
         ]),
     ]);
 
-    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues[0]->blockedBy)->toBe(['PROJ-99']);
@@ -150,7 +150,7 @@ it('fetches states by IDs for reconciliation', function () {
         ]),
     ]);
 
-    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger);
     $states = $tracker->fetchStatesByIds(['10001', '10002']);
 
     expect($states)->toBe(['10001' => 'In Progress', '10002' => 'Done']);

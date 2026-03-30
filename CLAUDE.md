@@ -8,16 +8,18 @@ PHP orchestration daemon for coding agents, built on Laravel Zero. Polls issue t
 app/
   Agent/ClaudeCodeRunner.php      # Multi-turn Claude Code invocation, streaming JSON parsing
   Commands/RunCommand.php         # CLI entry point: ./application run [workflow.md]
-  Config/WorkflowConfig.php       # YAML config parsing, env var resolution, validation
+  Config/
+    StageConfig.php               # Pipeline stage value object (name, trigger, command, timeouts)
+    WorkflowConfig.php            # YAML config parsing, env var resolution, pipeline stages
   Logging/StructuredFormatter.php # key=value structured log format with secret redaction
-  Orchestrator/Orchestrator.php   # Main loop: polling, forking, reconciliation, retries
+  Orchestrator/Orchestrator.php   # Main loop: polling, forking, reconciliation, retries, pipeline dispatch
   Prompt/PromptBuilder.php        # Twig template rendering for issue prompts
   Tracker/
     TrackerInterface.php          # Contract for issue fetchers
     GitHubTracker.php             # GitHub Issues REST API
     JiraTracker.php               # Jira REST API v3
     Issue.php                     # Normalized issue DTO
-  Workflow/WorkflowLoader.php     # YAML frontmatter + Twig prompt parser
+  Workflow/WorkflowLoader.php     # YAML frontmatter + stage prompt parser
   Workspace/WorkspaceManager.php  # Workspace lifecycle (git worktrees), setup commands, cleanup
 ```
 
@@ -53,6 +55,7 @@ Workflow files (e.g., `WORKFLOW.md`) contain YAML frontmatter with these section
 - `workspace` - root path, setup commands (array), setup_timeout_ms (default: 60000)
 - `agent` - max_concurrent_agents (default: 10), max_turns (default: 20), max_retry_backoff_ms (default: 300000)
 - `claude` (optional) - command (default: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions`), turn_timeout_ms (default: 3600000), stall_timeout_ms (default: 300000)
+- `pipeline` (optional) - stages array for multi-agent workflows; each stage has name, trigger label, and optional claude overrides
 
 ## When Updating Documentation
 

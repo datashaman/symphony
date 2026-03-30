@@ -14,7 +14,7 @@ interface TrackerInterface
     /**
      * Fetch issues filtered by the given states.
      *
-     * @param string[] $states
+     * @param  string[]  $states
      * @return Issue[]
      */
     public function fetchIssuesByStates(array $states): array;
@@ -22,7 +22,7 @@ interface TrackerInterface
     /**
      * Fetch current states for a list of issue IDs (for reconciliation).
      *
-     * @param string[] $ids
+     * @param  string[]  $ids
      * @return array<string, string> Map of id => state
      */
     public function fetchStatesByIds(array $ids): array;
@@ -31,9 +31,11 @@ interface TrackerInterface
      * Ensure configured state labels/statuses exist on the tracker.
      * Creates any that are missing. No-op for trackers that use
      * built-in workflow statuses (e.g., Jira).
+     *
+     * @param  string[]  $extraLabels  Additional labels to ensure (e.g., pipeline stage triggers)
      */
     /**
      * @return string[] Labels that were created
      */
-    public function ensureLabels(): array;
+    public function ensureLabels(array $extraLabels = []): array;
 }
