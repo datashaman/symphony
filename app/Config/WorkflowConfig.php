@@ -22,7 +22,7 @@ class WorkflowConfig
             'max_retry_backoff_ms' => 300000,
         ],
         'claude' => [
-            'command' => 'claude -p --output-format stream-json',
+            'command' => 'claude -p --verbose --output-format stream-json',
             'turn_timeout_ms' => 3600000,
             'stall_timeout_ms' => 300000,
         ],
@@ -83,7 +83,7 @@ class WorkflowConfig
 
     public function workspaceRoot(): string
     {
-        return $this->resolved['workspace']['root'] ?? sys_get_temp_dir() . '/symphony_workspaces';
+        return $this->resolved['workspace']['root'] ?? '';
     }
 
     public function workspaceHooks(): array

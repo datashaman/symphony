@@ -20,7 +20,7 @@ class WorkspaceManager
     ) {
         $this->repoRoot = $this->detectRepoRoot();
         $this->baseBranch = $this->detectBaseBranch();
-        $this->root = $config->workspaceRoot() ?: $this->repoRoot . '/.symphony-worktrees';
+        $this->root = $config->workspaceRoot() ?: $this->repoRoot . '/.symphony/worktrees';
     }
 
     public function pathForIssue(Issue $issue): string

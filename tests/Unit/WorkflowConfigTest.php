@@ -20,7 +20,7 @@ it('applies all defaults when only required fields provided', function () {
     expect($config->maxConcurrentAgents())->toBe(10);
     expect($config->maxTurns())->toBe(20);
     expect($config->maxRetryBackoffMs())->toBe(300000);
-    expect($config->claudeCommand())->toBe('claude -p --output-format stream-json');
+    expect($config->claudeCommand())->toBe('claude -p --verbose --output-format stream-json');
     expect($config->claudeTurnTimeoutMs())->toBe(3600000);
     expect($config->claudeStallTimeoutMs())->toBe(300000);
 
