@@ -7,7 +7,7 @@ Set `tracker.kind` to `jira` in your workflow file:
 ```yaml
 tracker:
   kind: jira
-  endpoint: https://your-domain.atlassian.net
+  endpoint: $JIRA_BASE_URL
   project_slug: PROJ
   email: $JIRA_EMAIL
   api_key: $JIRA_API_TOKEN
@@ -40,20 +40,34 @@ JIRA_API_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxx
 | `tracker.project_slug` | Yes | Jira project key (e.g., `PROJ`) |
 | `tracker.email` | Yes | Email for API authentication |
 | `tracker.api_key` | Yes | Jira API token |
-| `tracker.active_states` | No | States to treat as workable (default: `['To Do', 'In Progress']`) |
-| `tracker.terminal_states` | No | States to treat as finished (default: `['Done', 'Closed', 'Cancelled', 'Canceled', 'Duplicate']`) |
+| `tracker.active_states` | No | States to treat as workable (default: `['Todo', 'In Progress']`) |
+| `tracker.terminal_states` | No | States to treat as finished (default: `['Closed', 'Cancelled', 'Canceled', 'Duplicate', 'Done']`) |
+| `tracker.assignee` | No | Filter by assignee. Default: `currentUser()`. Set to `none` to disable. |
+| `tracker.sprint` | No | Filter by sprint. Default: `openSprints()`. Set to `none` to disable. |
+| `tracker.jql` | No | Custom JQL override. When set, replaces the auto-generated query entirely. |
 
 ## How Candidate Issues Are Fetched
 
-The Jira tracker:
-1. Builds a JQL query: `project = <project_slug> AND status IN (<active_states>)`
-2. Queries the Jira REST API v3 (`/rest/api/3/search`)
-3. Paginates through all results
-4. Maps Jira fields to the normalized Issue DTO
+The Jira tracker builds a JQL query and paginates through results (50 per page).
+
+**Default JQL construction:**
+```
+project = PROJ AND status in ("To Do","In Progress") AND assignee = currentUser() AND sprint in openSprints()
+```
+
+Set `tracker.jql` to override with a fully custom query:
+```yaml
+tracker:
+  jql: "project = PROJ AND labels = symphony AND status != Done"
+```
+
+Set `tracker.assignee: none` or `tracker.sprint: none` to omit those clauses from the default query.
+
+**Fields fetched:** summary, description, status, priority, labels, issuelinks, created, updated.
 
 ## State Mapping
 
-Jira states are matched by the issue's workflow status name (case-insensitive). Use the exact status names from your Jira workflow:
+Jira states are matched by the issue's workflow `status.name` field. Use the exact status names from your Jira workflow:
 
 ```yaml
 tracker:
@@ -68,8 +82,16 @@ tracker:
 
 ## Priority
 
-Jira's native priority field is used directly. The tracker maps Jira priority names to numeric values for sorting (Highest=1, High=2, Medium=3, Low=4, Lowest=5).
+Jira's native `priority.id` field is used directly as a numeric value for sorting.
 
 ## Blocked Issues
 
-The Jira tracker reads the `issuelinks` field to detect blocking relationships. If an issue is blocked by another issue that is in an active state, Symphony skips it until the blocker resolves.
+The Jira tracker reads the `issuelinks` field. Links where `type.name` is "blocks" and an `inwardIssue.key` exists are recorded as blockers. Symphony skips blocked issues until all blockers resolve.
+
+## Description Handling
+
+Jira stores descriptions in Atlassian Document Format (ADF). The tracker recursively walks ADF nodes to extract plain text, adding newlines after block elements (paragraphs, headings, lists).
+
+## Label Management
+
+Unlike the GitHub tracker, the Jira tracker does not manage labels — Jira uses workflow statuses for state tracking, so `ensureLabels()` is a no-op.

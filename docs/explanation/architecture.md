@@ -24,7 +24,7 @@ Tracker  Workspace  Prompt  Agent  Workflow
 
 ### RunCommand
 
-Entry point (`./application run`). Creates and wires all components, registers SIGINT/SIGTERM handlers, and starts the orchestrator loop.
+Entry point (`./application run`). Creates and wires all components, registers SIGINT/SIGTERM handlers, and starts the orchestrator loop. Uses a match expression to create the appropriate tracker (GitHub or Jira) based on config.
 
 ### Orchestrator
 
@@ -38,11 +38,11 @@ The central coordinator. Runs an infinite loop where each tick:
 
 ### TrackerInterface / GitHubTracker / JiraTracker
 
-Abstraction for issue fetching. Each tracker implementation queries its API, paginates results, and maps responses to the normalized `Issue` DTO. Trackers also support fetching states by ID for blocker checks and reconciliation.
+Abstraction for issue fetching. Each tracker implementation queries its API, paginates results, and maps responses to the normalized `Issue` DTO. Trackers also support fetching states by ID for blocker checks and reconciliation. The GitHub tracker auto-creates configured state labels at startup.
 
 ### WorkspaceManager
 
-Manages isolated directories for each issue. Handles creation, hook execution, and cleanup. Includes path traversal protection to prevent workspaces from escaping the root directory.
+Manages git worktrees for each issue. Creates worktrees from the detected base branch (origin/HEAD, main, or master), runs setup commands with `%BASE%` substitution, and handles cleanup. Includes path traversal protection to prevent worktrees from escaping the root directory.
 
 ### PromptBuilder
 
@@ -50,11 +50,11 @@ Renders Twig templates with issue data and retry context. Converts DateTimes to 
 
 ### ClaudeCodeRunner
 
-Launches Claude Code via `proc_open`, manages streaming JSON output parsing, enforces turn and stall timeouts, and supports multi-turn sessions (first turn sends prompt, subsequent turns use `--continue`).
+Launches Claude Code via `proc_open`, manages streaming JSON output parsing, enforces turn and stall timeouts, and supports multi-turn sessions (first turn sends prompt via stdin, subsequent turns use `--continue`). Logs tool use and result events to both the console and structured log.
 
 ### WorkflowLoader
 
-Parses workflow files: splits YAML frontmatter from the Twig prompt template, validates structure. Re-reads the file on each call, enabling live config changes.
+Parses workflow files: splits YAML frontmatter from the Twig prompt template using regex, validates structure. Re-reads the file on each call, enabling live config changes.
 
 ## Data Flow
 
@@ -63,17 +63,19 @@ Parses workflow files: splits YAML frontmatter from the Twig prompt template, va
 3. **Tracker** fetches issues and returns `Issue[]`
 4. **Orchestrator** sorts, filters, and dispatches eligible issues
 5. For each dispatched issue:
-   - **WorkspaceManager** creates directory and runs `after_create` hooks
+   - **WorkspaceManager** creates a git worktree and runs setup commands
    - **PromptBuilder** renders the template with issue data
    - **ClaudeCodeRunner** pipes the prompt to Claude Code and monitors output
 6. Parent process monitors children and handles retries/cleanup
 
 ## Key Design Decisions
 
-**Process isolation via fork**: Each issue runs in a separate child process. This provides natural isolation - a crash in one agent doesn't affect others. The parent never does heavy work, it only coordinates.
+**Process isolation via fork**: Each issue runs in a separate child process via `pcntl_fork`. This provides natural isolation — a crash in one agent doesn't affect others. The parent never does heavy work, it only coordinates.
 
 **Polling over webhooks**: Symphony pulls from the tracker on a timer rather than receiving push events. This simplifies deployment (no public endpoint needed) and makes the system resilient to network interruptions.
 
 **Live config reload**: The workflow file is re-read on every tick. This allows changing concurrency limits, timeouts, or even the prompt template without restarting the daemon.
 
 **Normalized Issue DTO**: Both GitHub and Jira map to the same `Issue` structure. The orchestrator and prompt builder never deal with tracker-specific data.
+
+**Git worktrees for isolation**: Each issue gets its own git worktree rather than a clone, keeping the repo's objects shared while providing branch-level isolation.

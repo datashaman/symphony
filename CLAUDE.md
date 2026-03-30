@@ -1,6 +1,6 @@
 # Symphony
 
-PHP orchestration daemon for coding agents, built on Laravel Zero. Polls issue trackers (GitHub, Jira), creates isolated workspaces per issue, and dispatches Claude Code agent processes with multi-turn support and retry logic.
+PHP orchestration daemon for coding agents, built on Laravel Zero. Polls issue trackers (GitHub, Jira), creates isolated git worktrees per issue, and dispatches Claude Code agent processes with multi-turn support and retry logic.
 
 ## Project Structure
 
@@ -18,7 +18,7 @@ app/
     JiraTracker.php               # Jira REST API v3
     Issue.php                     # Normalized issue DTO
   Workflow/WorkflowLoader.php     # YAML frontmatter + Twig prompt parser
-  Workspace/WorkspaceManager.php  # Workspace lifecycle, hooks, cleanup
+  Workspace/WorkspaceManager.php  # Workspace lifecycle (git worktrees), setup commands, cleanup
 ```
 
 ## Development Commands
@@ -48,11 +48,11 @@ app/
 ## Configuration
 
 Workflow files (e.g., `WORKFLOW.md`) contain YAML frontmatter with these sections:
-- `tracker` - kind (github/jira), credentials, active/terminal states
+- `tracker` - kind (github/jira), credentials, active/terminal states, assignee/sprint/jql (Jira)
 - `polling` - interval_ms (default: 30000)
-- `workspace` - root path, hooks (after_create, before_run, before_remove)
-- `agent` - max_concurrent_agents (default: 10), max_turns (default: 20)
-- `claude` (optional) - command (default: `claude -p --output-format stream-json`), turn_timeout_ms (default: 3600000), stall_timeout_ms (default: 300000)
+- `workspace` - root path, setup commands (array), setup_timeout_ms (default: 60000)
+- `agent` - max_concurrent_agents (default: 10), max_turns (default: 20), max_retry_backoff_ms (default: 300000)
+- `claude` (optional) - command (default: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions`), turn_timeout_ms (default: 3600000), stall_timeout_ms (default: 300000)
 
 ## When Updating Documentation
 

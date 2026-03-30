@@ -1,6 +1,6 @@
 # Multi-turn Agent Sessions
 
-Symphony supports multi-turn Claude Code sessions where an agent can retry within the same workspace if the first attempt fails.
+Symphony supports multi-turn Claude Code sessions where an agent can retry within the same worktree if the first attempt fails.
 
 ## How It Works
 
@@ -9,7 +9,7 @@ Each child process runs an agent session of up to `max_turns` turns:
 ### Turn 1: Initial Prompt
 
 1. Build the full prompt from the Twig template with issue data
-2. Launch Claude Code: `claude -p --output-format stream-json`
+2. Launch Claude Code: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions`
 3. Pipe the rendered prompt to stdin
 4. Parse streaming JSON output for session_id and token usage
 5. Wait for the process to exit
@@ -39,15 +39,15 @@ The number of turns controls how many chances an agent gets within a single disp
 | | Turn | Retry |
 |---|------|-------|
 | **Scope** | Within a single child process | New child process |
-| **Workspace** | Same workspace, preserved state | Same workspace, preserved state |
+| **Worktree** | Same worktree, preserved state | Same worktree, preserved state |
 | **Session** | Continuation (`--continue`) | Fresh prompt (with `attempt` variable) |
-| **Delay** | 1 second | Exponential backoff (10s-300s) |
+| **Delay** | 1 second | Exponential backoff (10s–300s) |
 | **Prompt** | No new prompt | Full prompt re-rendered with `attempt` set |
 
 A typical lifecycle:
 1. Issue dispatched, child process starts
 2. Turn 1 fails (e.g., tests don't pass)
-3. Turns 2-5: continuation attempts, each building on prior work
+3. Turns 2–5: continuation attempts, each building on prior work
 4. If all turns fail, child exits with non-zero code
 5. Parent queues issue for retry with backoff
 6. On retry, a new child process starts with the full prompt (including `{% if attempt %}` block)
@@ -56,8 +56,8 @@ A typical lifecycle:
 
 Each turn has its own timeout enforcement:
 
-- **Turn timeout** (`claude.turn_timeout_ms`): Maximum wall-clock time for a single Claude Code invocation
-- **Stall timeout** (`claude.stall_timeout_ms`): Maximum time without any stdout output
+- **Turn timeout** (`claude.turn_timeout_ms`): Maximum wall-clock time for a single Claude Code invocation (default: 1 hour)
+- **Stall timeout** (`claude.stall_timeout_ms`): Maximum time without any stdout output (default: 5 minutes)
 
 If either timeout fires, the Claude Code process is killed with SIGTERM and the turn counts as failed.
 
@@ -70,6 +70,11 @@ Token usage is accumulated across all turns in a session. The final result inclu
 Claude Code with `--output-format stream-json` emits newline-delimited JSON events. The runner parses these incrementally to extract:
 - `session_id`: Identifies the session for continuation
 - `usage.input_tokens` / `usage.output_tokens`: Token consumption
-- `input_tokens` / `output_tokens`: Alternative top-level token fields
+- Top-level `input_tokens` / `output_tokens`: Alternative token fields
 
-Unrecognized event types are logged at debug level and otherwise ignored.
+The runner also logs agent activity:
+- **Tool use**: Logs tool name and a summary (file path, command, pattern)
+- **Text output**: Logs assistant text (truncated to 200 chars)
+- **Results**: Logs subtype, duration, and cost
+- Known event types (system, user, message, content_block_delta/stop, message_delta/stop, rate_limit_event) are silently ignored
+- Unknown event types are logged as warnings

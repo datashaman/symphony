@@ -37,16 +37,16 @@ claude:
 
 If Claude Code produces no stdout for this duration, it's considered stalled and killed.
 
-### Hook Timeout
+### Setup Timeout
 
-Maximum time for workspace hooks to complete:
+Maximum time for workspace setup commands to complete:
 
 ```yaml
-hooks:
-  timeout_ms: 60000  # 1 minute (default)
+workspace:
+  setup_timeout_ms: 60000  # 1 minute (default)
 ```
 
-If a hook exceeds this, it's killed. Fatal hooks (`after_create`, `before_run`) cause the child process to fail. Non-fatal hooks (`before_remove`) log a warning and continue.
+If a setup command exceeds this timeout, it's killed with SIGTERM and the workspace creation fails.
 
 ## Retry Backoff
 
@@ -72,7 +72,7 @@ agent:
   max_retry_backoff_ms: 300000  # 5 minutes (default)
 ```
 
-There is no maximum retry count - issues continue retrying until they succeed or their tracker state changes to terminal.
+There is no maximum retry count — issues continue retrying until they succeed or their tracker state changes to terminal.
 
 ## Polling Interval
 
