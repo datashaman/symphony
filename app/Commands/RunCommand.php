@@ -4,7 +4,6 @@ namespace App\Commands;
 
 use App\Agent\ClaudeCodeRunner;
 use App\Config\WorkflowConfig;
-use App\Logging\StructuredFormatter;
 use App\Orchestrator\Orchestrator;
 use App\Prompt\PromptBuilder;
 use App\Tracker\GitHubTracker;
@@ -12,9 +11,8 @@ use App\Tracker\JiraTracker;
 use App\Tracker\TrackerInterface;
 use App\Workflow\WorkflowLoader;
 use App\Workspace\WorkspaceManager;
+use Illuminate\Support\Facades\Log;
 use LaravelZero\Framework\Commands\Command;
-use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
 
 class RunCommand extends Command
 {
@@ -31,11 +29,7 @@ class RunCommand extends Command
             return 1;
         }
 
-        // Set up structured logger
-        $logger = new Logger('symphony');
-        $handler = new StreamHandler('php://stderr', Logger::INFO);
-        $handler->setFormatter(new StructuredFormatter());
-        $logger->pushHandler($handler);
+        $logger = Log::getLogger();
 
         try {
             // Load workflow
@@ -60,17 +54,17 @@ class RunCommand extends Command
             );
 
             // Register signal handlers
-            pcntl_signal(SIGINT, function () use ($orchestrator, $logger) {
-                $logger->info('Received SIGINT');
+            pcntl_signal(SIGINT, function () use ($orchestrator) {
+                Log::info('Received SIGINT');
                 $orchestrator->requestShutdown();
             });
 
-            pcntl_signal(SIGTERM, function () use ($orchestrator, $logger) {
-                $logger->info('Received SIGTERM');
+            pcntl_signal(SIGTERM, function () use ($orchestrator) {
+                Log::info('Received SIGTERM');
                 $orchestrator->requestShutdown();
             });
 
-            $logger->info('Symphony starting', [
+            Log::info('Symphony starting', [
                 'workflow' => $workflowPath,
                 'tracker' => $config->trackerKind(),
             ]);
@@ -81,13 +75,13 @@ class RunCommand extends Command
             return 0;
         } catch (\Throwable $e) {
             $this->error("Startup failed: {$e->getMessage()}");
-            $logger->error('Startup failed', ['error' => $e->getMessage()]);
+            Log::error('Startup failed', ['error' => $e->getMessage()]);
 
             return 1;
         }
     }
 
-    private function createTracker(WorkflowConfig $config, Logger $logger): TrackerInterface
+    private function createTracker(WorkflowConfig $config, $logger): TrackerInterface
     {
         return match ($config->trackerKind()) {
             'github' => new GitHubTracker($config, $logger),

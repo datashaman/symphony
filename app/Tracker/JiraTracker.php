@@ -4,14 +4,15 @@ namespace App\Tracker;
 
 use App\Config\WorkflowConfig;
 use DateTimeImmutable;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 
 class JiraTracker implements TrackerInterface
 {
-    private Client $client;
+    private PendingRequest $http;
+    private string $baseUrl;
     private string $projectSlug;
     private array $activeStates;
     private array $terminalStates;
@@ -19,13 +20,14 @@ class JiraTracker implements TrackerInterface
     public function __construct(
         private WorkflowConfig $config,
         private LoggerInterface $logger,
-        ?Client $client = null,
+        ?PendingRequest $http = null,
     ) {
         $endpoint = $config->trackerEndpoint();
         if (!$endpoint) {
             throw new InvalidArgumentException('Jira tracker requires tracker.endpoint');
         }
 
+        $this->baseUrl = rtrim($endpoint, '/');
         $this->projectSlug = $config->trackerProjectSlug()
             ?? throw new InvalidArgumentException('Jira tracker requires tracker.project_slug');
 
@@ -35,16 +37,12 @@ class JiraTracker implements TrackerInterface
         $this->activeStates = $config->trackerActiveStates();
         $this->terminalStates = $config->trackerTerminalStates();
 
-        $authToken = base64_encode("{$email}:{$config->trackerApiKey()}");
-
-        $this->client = $client ?? new Client([
-            'base_uri' => rtrim($endpoint, '/'),
-            'headers' => [
-                'Authorization' => "Basic {$authToken}",
+        $this->http = $http ?? Http::withBasicAuth($email, $config->trackerApiKey())
+            ->withHeaders([
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
-            ],
-        ]);
+            ])
+            ->throw();
     }
 
     public function fetchCandidateIssues(): array
@@ -63,12 +61,12 @@ class JiraTracker implements TrackerInterface
 
         foreach ($ids as $id) {
             try {
-                $response = $this->client->get("/rest/api/3/issue/{$id}", [
-                    'query' => ['fields' => 'status'],
+                $response = $this->http->get("{$this->baseUrl}/rest/api/3/issue/{$id}", [
+                    'fields' => 'status',
                 ]);
-                $data = json_decode($response->getBody()->getContents(), true);
+                $data = $response->json();
                 $states[$id] = $data['fields']['status']['name'] ?? 'unknown';
-            } catch (GuzzleException $e) {
+            } catch (\Exception $e) {
                 $this->logger->warning("Failed to fetch Jira issue {$id}: {$e->getMessage()}");
             }
         }
@@ -94,16 +92,14 @@ class JiraTracker implements TrackerInterface
         $maxResults = 50;
 
         do {
-            $response = $this->client->get('/rest/api/3/search', [
-                'query' => [
-                    'jql' => $jql,
-                    'startAt' => $startAt,
-                    'maxResults' => $maxResults,
-                    'fields' => 'summary,description,status,priority,labels,issuelinks,created,updated',
-                ],
+            $response = $this->http->get("{$this->baseUrl}/rest/api/3/search", [
+                'jql' => $jql,
+                'startAt' => $startAt,
+                'maxResults' => $maxResults,
+                'fields' => 'summary,description,status,priority,labels,issuelinks,created,updated',
             ]);
 
-            $data = json_decode($response->getBody()->getContents(), true);
+            $data = $response->json();
             $total = $data['total'] ?? 0;
 
             foreach ($data['issues'] ?? [] as $item) {

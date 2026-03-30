@@ -2,10 +2,7 @@
 
 use App\Config\WorkflowConfig;
 use App\Tracker\JiraTracker;
-use GuzzleHttp\Client;
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Psr7\Response;
+use Illuminate\Support\Facades\Http;
 use Psr\Log\NullLogger;
 
 function makeJiraConfig(): WorkflowConfig
@@ -27,17 +24,9 @@ function makeJiraConfig(): WorkflowConfig
     return $config;
 }
 
-function makeJiraTracker(MockHandler $mock): JiraTracker
-{
-    $handlerStack = HandlerStack::create($mock);
-    $client = new Client(['handler' => $handlerStack]);
-
-    return new JiraTracker(makeJiraConfig(), new NullLogger(), $client);
-}
-
 it('fetches candidate issues via JQL', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'jira.example.com/rest/api/3/search*' => Http::response([
             'total' => 1,
             'issues' => [
                 [
@@ -56,10 +45,10 @@ it('fetches candidate issues via JQL', function () {
                     ],
                 ],
             ],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeJiraTracker($mock);
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(1);
@@ -70,54 +59,55 @@ it('fetches candidate issues via JQL', function () {
 });
 
 it('handles pagination with startAt/maxResults', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
-            'total' => 60,
-            'issues' => array_map(fn($i) => [
-                'id' => (string) $i,
-                'key' => "PROJ-{$i}",
-                'self' => '',
-                'fields' => [
-                    'summary' => "Issue {$i}",
-                    'description' => null,
-                    'status' => ['name' => 'To Do'],
-                    'priority' => null,
-                    'labels' => [],
-                    'issuelinks' => [],
-                    'created' => '2025-01-01T00:00:00.000+0000',
-                    'updated' => '2025-01-01T00:00:00.000+0000',
-                ],
-            ], range(1, 50)),
-        ])),
-        new Response(200, [], json_encode([
-            'total' => 60,
-            'issues' => array_map(fn($i) => [
-                'id' => (string) $i,
-                'key' => "PROJ-{$i}",
-                'self' => '',
-                'fields' => [
-                    'summary' => "Issue {$i}",
-                    'description' => null,
-                    'status' => ['name' => 'To Do'],
-                    'priority' => null,
-                    'labels' => [],
-                    'issuelinks' => [],
-                    'created' => '2025-01-01T00:00:00.000+0000',
-                    'updated' => '2025-01-01T00:00:00.000+0000',
-                ],
-            ], range(51, 60)),
-        ])),
+    Http::fake([
+        'jira.example.com/rest/api/3/search*' => Http::sequence()
+            ->push([
+                'total' => 60,
+                'issues' => array_map(fn($i) => [
+                    'id' => (string) $i,
+                    'key' => "PROJ-{$i}",
+                    'self' => '',
+                    'fields' => [
+                        'summary' => "Issue {$i}",
+                        'description' => null,
+                        'status' => ['name' => 'To Do'],
+                        'priority' => null,
+                        'labels' => [],
+                        'issuelinks' => [],
+                        'created' => '2025-01-01T00:00:00.000+0000',
+                        'updated' => '2025-01-01T00:00:00.000+0000',
+                    ],
+                ], range(1, 50)),
+            ])
+            ->push([
+                'total' => 60,
+                'issues' => array_map(fn($i) => [
+                    'id' => (string) $i,
+                    'key' => "PROJ-{$i}",
+                    'self' => '',
+                    'fields' => [
+                        'summary' => "Issue {$i}",
+                        'description' => null,
+                        'status' => ['name' => 'To Do'],
+                        'priority' => null,
+                        'labels' => [],
+                        'issuelinks' => [],
+                        'created' => '2025-01-01T00:00:00.000+0000',
+                        'updated' => '2025-01-01T00:00:00.000+0000',
+                    ],
+                ], range(51, 60)),
+            ]),
     ]);
 
-    $tracker = makeJiraTracker($mock);
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(60);
 });
 
 it('extracts blocked-by from issue links', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'jira.example.com/rest/api/3/search*' => Http::response([
             'total' => 1,
             'issues' => [
                 [
@@ -141,26 +131,26 @@ it('extracts blocked-by from issue links', function () {
                     ],
                 ],
             ],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeJiraTracker($mock);
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues[0]->blockedBy)->toBe(['PROJ-99']);
 });
 
 it('fetches states by IDs for reconciliation', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'jira.example.com/rest/api/3/issue/10001*' => Http::response([
             'fields' => ['status' => ['name' => 'In Progress']],
-        ])),
-        new Response(200, [], json_encode([
+        ]),
+        'jira.example.com/rest/api/3/issue/10002*' => Http::response([
             'fields' => ['status' => ['name' => 'Done']],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeJiraTracker($mock);
+    $tracker = new JiraTracker(makeJiraConfig(), new NullLogger());
     $states = $tracker->fetchStatesByIds(['10001', '10002']);
 
     expect($states)->toBe(['10001' => 'In Progress', '10002' => 'Done']);

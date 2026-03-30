@@ -4,13 +4,14 @@ namespace App\Tracker;
 
 use App\Config\WorkflowConfig;
 use DateTimeImmutable;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
 use Psr\Log\LoggerInterface;
 
 class GitHubTracker implements TrackerInterface
 {
-    private Client $client;
+    private PendingRequest $http;
+    private string $baseUrl = 'https://api.github.com';
     private string $owner;
     private string $repo;
     private array $activeStates;
@@ -19,7 +20,7 @@ class GitHubTracker implements TrackerInterface
     public function __construct(
         private WorkflowConfig $config,
         private LoggerInterface $logger,
-        ?Client $client = null,
+        ?PendingRequest $http = null,
     ) {
         $repository = $config->trackerRepository();
         if (!$repository || !str_contains($repository, '/')) {
@@ -30,21 +31,19 @@ class GitHubTracker implements TrackerInterface
         $this->activeStates = array_map('strtolower', $config->trackerActiveStates());
         $this->terminalStates = array_map('strtolower', $config->trackerTerminalStates());
 
-        $this->client = $client ?? new Client([
-            'base_uri' => 'https://api.github.com',
-            'headers' => [
-                'Authorization' => "Bearer {$config->trackerApiKey()}",
+        $this->http = $http ?? Http::withToken($config->trackerApiKey())
+            ->withHeaders([
                 'Accept' => 'application/vnd.github.v3+json',
                 'X-GitHub-Api-Version' => '2022-11-28',
-            ],
-        ]);
+            ])
+            ->throw();
     }
 
     public function fetchCandidateIssues(): array
     {
         $labels = implode(',', $this->activeStates);
 
-        return $this->fetchIssuesWithPagination("/repos/{$this->owner}/{$this->repo}/issues", [
+        return $this->fetchIssuesWithPagination("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues", [
             'state' => 'open',
             'labels' => $labels,
             'per_page' => 100,
@@ -55,7 +54,7 @@ class GitHubTracker implements TrackerInterface
     {
         $labels = implode(',', array_map('strtolower', $states));
 
-        return $this->fetchIssuesWithPagination("/repos/{$this->owner}/{$this->repo}/issues", [
+        return $this->fetchIssuesWithPagination("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues", [
             'state' => 'open',
             'labels' => $labels,
             'per_page' => 100,
@@ -68,10 +67,10 @@ class GitHubTracker implements TrackerInterface
 
         foreach ($ids as $id) {
             try {
-                $response = $this->client->get("/repos/{$this->owner}/{$this->repo}/issues/{$id}");
-                $data = json_decode($response->getBody()->getContents(), true);
+                $response = $this->http->get("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues/{$id}");
+                $data = $response->json();
                 $states[$id] = $this->determineState($data['labels'] ?? []);
-            } catch (GuzzleException $e) {
+            } catch (\Exception $e) {
                 $this->logger->warning("Failed to fetch issue {$id}: {$e->getMessage()}");
             }
         }
@@ -82,15 +81,14 @@ class GitHubTracker implements TrackerInterface
     /**
      * @return Issue[]
      */
-    private function fetchIssuesWithPagination(string $uri, array $query): array
+    private function fetchIssuesWithPagination(string $url, array $query): array
     {
         $issues = [];
-        $url = $uri;
         $params = $query;
 
         while ($url !== null) {
-            $response = $this->client->get($url, ['query' => $params]);
-            $data = json_decode($response->getBody()->getContents(), true);
+            $response = $this->http->get($url, $params);
+            $data = $response->json();
 
             foreach ($data as $item) {
                 // Skip pull requests (GitHub API returns them in issues endpoint)
@@ -101,7 +99,7 @@ class GitHubTracker implements TrackerInterface
                 $issues[] = $this->normalizeIssue($item);
             }
 
-            $url = $this->getNextPageUrl($response->getHeader('Link'));
+            $url = $this->getNextPageUrl($response->header('Link'));
             $params = []; // Next URL already contains query params
         }
 
@@ -175,12 +173,10 @@ class GitHubTracker implements TrackerInterface
         return $blockedBy;
     }
 
-    private function getNextPageUrl(array $linkHeaders): ?string
+    private function getNextPageUrl(?string $linkHeader): ?string
     {
-        foreach ($linkHeaders as $header) {
-            if (preg_match('/<([^>]+)>;\s*rel="next"/', $header, $matches)) {
-                return $matches[1];
-            }
+        if ($linkHeader && preg_match('/<([^>]+)>;\s*rel="next"/', $linkHeader, $matches)) {
+            return $matches[1];
         }
 
         return null;

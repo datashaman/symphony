@@ -2,10 +2,7 @@
 
 use App\Config\WorkflowConfig;
 use App\Tracker\GitHubTracker;
-use GuzzleHttp\Client;
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Psr7\Response;
+use Illuminate\Support\Facades\Http;
 use Psr\Log\NullLogger;
 
 function makeGitHubConfig(): WorkflowConfig
@@ -25,17 +22,9 @@ function makeGitHubConfig(): WorkflowConfig
     return $config;
 }
 
-function makeGitHubTracker(MockHandler $mock): GitHubTracker
-{
-    $handlerStack = HandlerStack::create($mock);
-    $client = new Client(['handler' => $handlerStack]);
-
-    return new GitHubTracker(makeGitHubConfig(), new NullLogger(), $client);
-}
-
 it('fetches candidate issues', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'github.com/repos/datashaman/my-project/issues*' => Http::response([
             [
                 'number' => 42,
                 'title' => 'Fix login bug',
@@ -45,10 +34,10 @@ it('fetches candidate issues', function () {
                 'created_at' => '2025-01-15T10:00:00Z',
                 'updated_at' => '2025-01-16T10:00:00Z',
             ],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeGitHubTracker($mock);
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(1);
@@ -60,34 +49,33 @@ it('fetches candidate issues', function () {
 });
 
 it('handles pagination via Link header', function () {
-    $mock = new MockHandler([
-        new Response(200, [
-            'Link' => '<https://api.github.com/repos/datashaman/my-project/issues?page=2>; rel="next"',
-        ], json_encode([
-            [
-                'number' => 1,
-                'title' => 'Issue 1',
-                'body' => '',
-                'labels' => [['name' => 'todo']],
-                'html_url' => '',
-                'created_at' => '2025-01-01T00:00:00Z',
-                'updated_at' => '2025-01-01T00:00:00Z',
-            ],
-        ])),
-        new Response(200, [], json_encode([
-            [
-                'number' => 2,
-                'title' => 'Issue 2',
-                'body' => '',
-                'labels' => [['name' => 'in-progress']],
-                'html_url' => '',
-                'created_at' => '2025-01-02T00:00:00Z',
-                'updated_at' => '2025-01-02T00:00:00Z',
-            ],
-        ])),
+    Http::fake([
+        'github.com/repos/datashaman/my-project/issues*' => Http::sequence()
+            ->push([
+                [
+                    'number' => 1,
+                    'title' => 'Issue 1',
+                    'body' => '',
+                    'labels' => [['name' => 'todo']],
+                    'html_url' => '',
+                    'created_at' => '2025-01-01T00:00:00Z',
+                    'updated_at' => '2025-01-01T00:00:00Z',
+                ],
+            ], 200, ['Link' => '<https://api.github.com/repos/datashaman/my-project/issues?page=2>; rel="next"'])
+            ->push([
+                [
+                    'number' => 2,
+                    'title' => 'Issue 2',
+                    'body' => '',
+                    'labels' => [['name' => 'in-progress']],
+                    'html_url' => '',
+                    'created_at' => '2025-01-02T00:00:00Z',
+                    'updated_at' => '2025-01-02T00:00:00Z',
+                ],
+            ]),
     ]);
 
-    $tracker = makeGitHubTracker($mock);
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(2);
@@ -96,26 +84,26 @@ it('handles pagination via Link header', function () {
 });
 
 it('fetches states by IDs for reconciliation', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'github.com/repos/datashaman/my-project/issues/42' => Http::response([
             'number' => 42,
             'labels' => [['name' => 'todo']],
-        ])),
-        new Response(200, [], json_encode([
+        ]),
+        'github.com/repos/datashaman/my-project/issues/99' => Http::response([
             'number' => 99,
             'labels' => [['name' => 'done']],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeGitHubTracker($mock);
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
     $states = $tracker->fetchStatesByIds(['42', '99']);
 
     expect($states)->toBe(['42' => 'todo', '99' => 'done']);
 });
 
 it('detects blocked-by from issue body', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'github.com/repos/datashaman/my-project/issues*' => Http::response([
             [
                 'number' => 50,
                 'title' => 'Blocked issue',
@@ -125,18 +113,18 @@ it('detects blocked-by from issue body', function () {
                 'created_at' => '2025-01-01T00:00:00Z',
                 'updated_at' => '2025-01-01T00:00:00Z',
             ],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeGitHubTracker($mock);
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues[0]->blockedBy)->toBe(['123', '456']);
 });
 
 it('extracts priority from labels', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'github.com/repos/datashaman/my-project/issues*' => Http::response([
             [
                 'number' => 10,
                 'title' => 'Priority issue',
@@ -146,18 +134,18 @@ it('extracts priority from labels', function () {
                 'created_at' => '2025-01-01T00:00:00Z',
                 'updated_at' => '2025-01-01T00:00:00Z',
             ],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeGitHubTracker($mock);
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues[0]->priority)->toBe(1);
 });
 
 it('skips pull requests in issues response', function () {
-    $mock = new MockHandler([
-        new Response(200, [], json_encode([
+    Http::fake([
+        'github.com/repos/datashaman/my-project/issues*' => Http::response([
             [
                 'number' => 10,
                 'title' => 'A PR',
@@ -177,10 +165,10 @@ it('skips pull requests in issues response', function () {
                 'created_at' => '2025-01-01T00:00:00Z',
                 'updated_at' => '2025-01-01T00:00:00Z',
             ],
-        ])),
+        ]),
     ]);
 
-    $tracker = makeGitHubTracker($mock);
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(1);
