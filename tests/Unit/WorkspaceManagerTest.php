@@ -58,19 +58,18 @@ function makeTestIssue(string $identifier = 'symphony#42', string $branchName = 
     );
 }
 
-it('computes workspace path with branchName sanitization', function () {
+it('computes workspace path with identifier sanitization', function () {
     $repo = makeTestGitRepo();
     $root = $repo . '/.symphony-worktrees';
     $config = makeWsConfig($root);
 
-    // chdir so WorkspaceManager can detect the repo
     $origDir = getcwd();
     chdir($repo);
 
     $manager = new WorkspaceManager($config, new NullLogger());
     $path = $manager->pathForIssue(makeTestIssue('sym#42', 'symphony/issue-42'));
 
-    expect($path)->toEndWith('/symphony_issue-42');
+    expect($path)->toEndWith('/sym_42');
     expect(str_starts_with($path, realpath($root)))->toBeTrue();
 
     chdir($origDir);

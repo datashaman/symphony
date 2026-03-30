@@ -25,7 +25,7 @@ class WorkspaceManager
 
     public function pathForIssue(Issue $issue): string
     {
-        $key = preg_replace('/[^A-Za-z0-9._-]/', '_', $issue->branchName);
+        $key = preg_replace('/[^A-Za-z0-9._-]/', '_', $issue->identifier);
         $path = $this->root . '/' . $key;
 
         if (!is_dir($this->root)) {
@@ -196,30 +196,98 @@ class WorkspaceManager
 
     public function cleanupTerminal(TrackerInterface $tracker): void
     {
+        $this->gitSafe('worktree prune');
+
         if (!is_dir($this->root)) {
             return;
         }
 
-        $entries = scandir($this->root);
-        if ($entries === false) {
-            return;
-        }
-
-        $workspaceDirs = array_filter($entries, fn($e) => $e !== '.' && $e !== '..' && is_dir($this->root . '/' . $e));
-
-        if (empty($workspaceDirs)) {
+        // Get worktrees registered under our root
+        $worktrees = $this->listWorktrees();
+        if (empty($worktrees)) {
             return;
         }
 
         $this->logger->info('Checking existing workspaces for terminal issues', [
-            'count' => count($workspaceDirs),
+            'count' => count($worktrees),
         ]);
 
-        // Worktree dirs are named after the sanitized branchName.
-        // We can't reverse-map to issue IDs reliably, so just prune
-        // stale worktree references and leave cleanup to manual removal
-        // or when the issue is re-fetched during a tick.
-        $this->gitSafe('worktree prune');
+        // Extract issue IDs from worktree dir names and check their states
+        $ids = [];
+        foreach ($worktrees as $wt) {
+            $dirName = basename($wt['path']);
+            // Dir name is sanitized identifier — extract the issue ID
+            // GitHub: "dispatch_12" -> "12", Jira: "PROJ-123" -> "PROJ-123"
+            if (preg_match('/(\d+)$/', $dirName, $matches)) {
+                $ids[$matches[1]] = $wt;
+            } else {
+                $ids[$dirName] = $wt;
+            }
+        }
+
+        $states = $tracker->fetchStatesByIds(array_keys($ids));
+        $terminalStates = array_map('strtolower', $this->config->trackerTerminalStates());
+
+        foreach ($states as $id => $state) {
+            if (in_array(strtolower($state), $terminalStates, true)) {
+                $wt = $ids[$id];
+                $this->logger->info('Cleaning up terminal worktree', [
+                    'id' => $id,
+                    'state' => $state,
+                    'path' => $wt['path'],
+                    'branch' => $wt['branch'],
+                ]);
+
+                $hooks = $this->config->workspaceHooks();
+                if (isset($hooks['before_remove'])) {
+                    foreach ((array) $hooks['before_remove'] as $command) {
+                        try {
+                            $this->runHook('before_remove', $command, $wt['path']);
+                        } catch (RuntimeException $e) {
+                            $this->logger->warning("before_remove hook failed during cleanup: {$e->getMessage()}");
+                        }
+                    }
+                }
+
+                $this->gitSafe("worktree remove --force {$this->escape($wt['path'])}");
+                if ($wt['branch']) {
+                    $this->gitSafe("branch -D {$this->escape($wt['branch'])}");
+                }
+            }
+        }
+    }
+
+    /**
+     * List worktrees under the workspace root.
+     *
+     * @return array<array{path: string, branch: string|null}>
+     */
+    private function listWorktrees(): array
+    {
+        $output = $this->git('worktree list --porcelain');
+        $worktrees = [];
+        $current = [];
+
+        foreach (explode("\n", $output) as $line) {
+            if (str_starts_with($line, 'worktree ')) {
+                $current = ['path' => substr($line, 9), 'branch' => null];
+            } elseif (str_starts_with($line, 'branch ')) {
+                $current['branch'] = basename(substr($line, 7));
+            } elseif ($line === '' && !empty($current)) {
+                // Only include worktrees under our root
+                if (isset($current['path']) && str_starts_with($current['path'], $this->root)) {
+                    $worktrees[] = $current;
+                }
+                $current = [];
+            }
+        }
+
+        // Handle last entry (no trailing newline)
+        if (!empty($current) && isset($current['path']) && str_starts_with($current['path'], $this->root)) {
+            $worktrees[] = $current;
+        }
+
+        return $worktrees;
     }
 
     private function detectRepoRoot(): string
