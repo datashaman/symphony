@@ -287,7 +287,9 @@ class Orchestrator
                     $this->queueRetry($issueId, 'failure', $exitCode);
                 } else {
                     $this->console("  <info>Completed</info> {$issueIdentifier}");
-                    unset($this->claimed[$issueId]);
+                    // Keep claimed so the issue is not re-dispatched.
+                    // It stays claimed until the tracker state changes
+                    // to terminal, at which point reconciliation clears it.
                 }
 
                 continue;
