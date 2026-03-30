@@ -12,16 +12,16 @@ class StructuredFormatter implements FormatterInterface
     public function format(LogRecord $record): string
     {
         $parts = [
-            'timestamp=' . $record->datetime->format('c'),
-            'level=' . strtolower($record->level->name),
-            'message=' . $this->quoteValue($record->message),
+            'timestamp='.$record->datetime->format('c'),
+            'level='.strtolower($record->level->name),
+            'message='.$this->quoteValue($record->message),
         ];
 
         // Add standard context fields
         $contextFields = ['issue_id', 'issue_identifier', 'session_id'];
         foreach ($contextFields as $field) {
             if (isset($record->context[$field]) && $record->context[$field] !== null) {
-                $parts[] = "{$field}=" . $this->quoteValue((string) $record->context[$field]);
+                $parts[] = "{$field}=".$this->quoteValue((string) $record->context[$field]);
             }
         }
 
@@ -32,10 +32,10 @@ class StructuredFormatter implements FormatterInterface
             }
 
             $value = $this->redactIfSensitive($key, $value);
-            $parts[] = "{$key}=" . $this->formatValue($value);
+            $parts[] = "{$key}=".$this->formatValue($value);
         }
 
-        return implode(' ', $parts) . "\n";
+        return implode(' ', $parts)."\n";
     }
 
     public function formatBatch(array $records): string
@@ -51,7 +51,7 @@ class StructuredFormatter implements FormatterInterface
     private function quoteValue(string $value): string
     {
         if (str_contains($value, ' ') || str_contains($value, '"') || str_contains($value, '=')) {
-            return '"' . addslashes($value) . '"';
+            return '"'.addslashes($value).'"';
         }
 
         return $value;

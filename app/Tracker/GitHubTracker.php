@@ -11,10 +11,15 @@ use Psr\Log\LoggerInterface;
 class GitHubTracker implements TrackerInterface
 {
     private PendingRequest $http;
+
     private string $baseUrl = 'https://api.github.com';
+
     private string $owner;
+
     private string $repo;
+
     private array $activeStates;
+
     private array $terminalStates;
 
     public function __construct(
@@ -23,7 +28,7 @@ class GitHubTracker implements TrackerInterface
         ?PendingRequest $http = null,
     ) {
         $repository = $config->trackerRepository();
-        if (!$repository || !str_contains($repository, '/')) {
+        if (! $repository || ! str_contains($repository, '/')) {
             throw new \InvalidArgumentException('GitHub tracker requires tracker.repository in owner/repo format');
         }
 
@@ -46,8 +51,7 @@ class GitHubTracker implements TrackerInterface
             'per_page' => 100,
         ]);
 
-        return array_values(array_filter($allIssues, fn(Issue $issue) =>
-            in_array(strtolower($issue->state), $this->activeStates, true)
+        return array_values(array_filter($allIssues, fn (Issue $issue) => in_array(strtolower($issue->state), $this->activeStates, true)
         ));
     }
 
@@ -59,8 +63,7 @@ class GitHubTracker implements TrackerInterface
             'per_page' => 100,
         ]);
 
-        return array_values(array_filter($allIssues, fn(Issue $issue) =>
-            in_array(strtolower($issue->state), $states, true)
+        return array_values(array_filter($allIssues, fn (Issue $issue) => in_array(strtolower($issue->state), $states, true)
         ));
     }
 
@@ -81,18 +84,18 @@ class GitHubTracker implements TrackerInterface
         return $states;
     }
 
-    public function ensureLabels(): array
+    public function ensureLabels(array $extraLabels = []): array
     {
         $response = $this->http->get("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/labels", [
             'per_page' => 100,
         ]);
-        $existing = array_map(fn($l) => strtolower($l['name']), $response->json());
+        $existing = array_map(fn ($l) => strtolower($l['name']), $response->json());
 
-        $needed = array_unique(array_merge($this->activeStates, $this->terminalStates));
+        $needed = array_unique(array_merge($this->activeStates, $this->terminalStates, $extraLabels));
         $created = [];
 
         foreach ($needed as $label) {
-            if (!in_array($label, $existing, true)) {
+            if (! in_array($label, $existing, true)) {
                 try {
                     $this->http->post("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/labels", [
                         'name' => $label,
@@ -138,12 +141,12 @@ class GitHubTracker implements TrackerInterface
 
     private function normalizeIssue(array $data): Issue
     {
-        $labels = array_map(fn($l) => is_array($l) ? $l['name'] : $l, $data['labels'] ?? []);
+        $labels = array_map(fn ($l) => is_array($l) ? $l['name'] : $l, $data['labels'] ?? []);
         $state = $this->determineState($labels);
         $priority = $this->extractPriority($labels);
         $blockedBy = $this->parseBlockedBy($data['body'] ?? '');
         $identifier = "{$this->repo}#{$data['number']}";
-        $branchName = 'symphony/' . preg_replace('/[^A-Za-z0-9._-]/', '_', $identifier);
+        $branchName = 'symphony/'.preg_replace('/[^A-Za-z0-9._-]/', '_', $identifier);
 
         return new Issue(
             id: (string) $data['number'],
@@ -163,7 +166,7 @@ class GitHubTracker implements TrackerInterface
 
     private function determineState(array $labels): string
     {
-        $labelNames = array_map(fn($l) => strtolower(is_array($l) ? $l['name'] : $l), $labels);
+        $labelNames = array_map(fn ($l) => strtolower(is_array($l) ? $l['name'] : $l), $labels);
 
         foreach ($this->terminalStates as $state) {
             if (in_array($state, $labelNames, true)) {

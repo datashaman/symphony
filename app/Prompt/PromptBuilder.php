@@ -12,7 +12,7 @@ class PromptBuilder
 
     public function __construct()
     {
-        $this->twig = new Environment(new ArrayLoader(), [
+        $this->twig = new Environment(new ArrayLoader, [
             'strict_variables' => true,
             'autoescape' => false,
         ]);

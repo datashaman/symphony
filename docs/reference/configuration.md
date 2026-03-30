@@ -52,6 +52,22 @@ The entire `claude` section is optional. Sensible defaults are provided.
 | `claude.turn_timeout_ms` | int | No | `3600000` | Maximum wall-clock time per turn (ms) |
 | `claude.stall_timeout_ms` | int | No | `300000` | Maximum time without output before killing (ms) |
 
+## pipeline
+
+The `pipeline` section enables multi-agent workflows where each issue passes through multiple stages with different prompts and claude settings. Stage transitions are driven by labels on the issue tracker.
+
+| Key | Type | Required | Default | Description |
+|-----|------|----------|---------|-------------|
+| `pipeline.stages` | array | No | `[]` | Ordered list of pipeline stages |
+| `pipeline.stages[].name` | string | Yes | - | Stage identifier (matches `---stage:name---` prompt section) |
+| `pipeline.stages[].trigger` | string | Yes | - | Label that triggers this stage |
+| `pipeline.stages[].command` | string | No | `claude.command` | Claude CLI command override |
+| `pipeline.stages[].max_turns` | int | No | `agent.max_turns` | Max turns override |
+| `pipeline.stages[].turn_timeout_ms` | int | No | `claude.turn_timeout_ms` | Turn timeout override |
+| `pipeline.stages[].stall_timeout_ms` | int | No | `claude.stall_timeout_ms` | Stall timeout override |
+
+When `pipeline.stages` is defined, the workflow body must contain `---stage:name---` delimiters for each stage's prompt template. See [Write Workflow Templates](../how-to/write-workflow-templates.md) for examples.
+
 ## Complete Example
 
 ```yaml

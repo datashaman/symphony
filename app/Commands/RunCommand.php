@@ -17,13 +17,14 @@ use LaravelZero\Framework\Commands\Command;
 class RunCommand extends Command
 {
     protected $signature = 'run {workflow=./WORKFLOW.md}';
+
     protected $description = 'Run the Symphony orchestrator';
 
     public function handle(): int
     {
         $workflowPath = $this->argument('workflow');
 
-        if (!file_exists($workflowPath)) {
+        if (! file_exists($workflowPath)) {
             $this->error("Workflow file not found: {$workflowPath}");
 
             return 1;
@@ -36,15 +37,15 @@ class RunCommand extends Command
             $loader = new WorkflowLoader($workflowPath);
             $workflow = $loader->load();
 
-            // Build config
-            $config = new WorkflowConfig($workflow['config']);
+            // Build config (pass stage prompts for pipeline workflows)
+            $config = new WorkflowConfig($workflow['config'], $workflow['stage_prompts'] ?? []);
 
             // Create tracker
             $tracker = $this->createTracker($config, $logger);
 
             // Create components
             $workspace = new WorkspaceManager($config, $logger);
-            $promptBuilder = new PromptBuilder();
+            $promptBuilder = new PromptBuilder;
             $agentRunner = new ClaudeCodeRunner($config, $logger, $this->output);
 
             // Create orchestrator
@@ -68,7 +69,11 @@ class RunCommand extends Command
 
             $this->info("Symphony starting ({$config->trackerKind()} tracker)");
             $this->line("  Workflow: {$workflowPath}");
-            $this->line("  Log file: " . getcwd() . "/symphony.log");
+            if ($config->hasPipeline()) {
+                $stageNames = array_map(fn ($s) => $s->name, $config->stages());
+                $this->line('  Pipeline: '.implode(' → ', $stageNames));
+            }
+            $this->line('  Log file: '.getcwd().'/symphony.log');
             Log::info('Symphony starting', [
                 'workflow' => $workflowPath,
                 'tracker' => $config->trackerKind(),

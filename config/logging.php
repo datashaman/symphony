@@ -61,9 +61,9 @@ return [
 
         'file' => [
             'driver' => 'single',
-            'path' => \Phar::running()
-                ? dirname(\Phar::running(false)) . '/symphony.log'
-                : getcwd() . '/symphony.log',
+            'path' => Phar::running()
+                ? dirname(Phar::running(false)).'/symphony.log'
+                : getcwd().'/symphony.log',
             'level' => env('LOG_LEVEL', 'debug'),
             'formatter' => StructuredFormatter::class,
         ],

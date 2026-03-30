@@ -36,7 +36,7 @@ BASH
     chmod($script, 0755);
 
     $config = makeRunnerConfig("bash {$script}");
-    $runner = new ClaudeCodeRunner($config, new NullLogger());
+    $runner = new ClaudeCodeRunner($config, new NullLogger);
     $result = $runner->runTurn('test prompt', sys_get_temp_dir());
 
     expect($result['success'])->toBeTrue();
@@ -58,7 +58,7 @@ BASH
     chmod($script, 0755);
 
     $config = makeRunnerConfig("bash {$script}");
-    $runner = new ClaudeCodeRunner($config, new NullLogger());
+    $runner = new ClaudeCodeRunner($config, new NullLogger);
     $result = $runner->runTurn('test prompt', sys_get_temp_dir());
 
     expect($result['success'])->toBeFalse();
@@ -77,7 +77,7 @@ BASH
     chmod($script, 0755);
 
     $config = makeRunnerConfig("bash {$script}", turnTimeoutMs: 200);
-    $runner = new ClaudeCodeRunner($config, new NullLogger());
+    $runner = new ClaudeCodeRunner($config, new NullLogger);
     $result = $runner->runTurn('test prompt', sys_get_temp_dir());
 
     expect($result['success'])->toBeFalse();
@@ -96,7 +96,7 @@ BASH
     chmod($script, 0755);
 
     $config = makeRunnerConfig("bash {$script}", stallTimeoutMs: 200);
-    $runner = new ClaudeCodeRunner($config, new NullLogger());
+    $runner = new ClaudeCodeRunner($config, new NullLogger);
     $result = $runner->runTurn('test prompt', sys_get_temp_dir());
 
     expect($result['success'])->toBeFalse();
@@ -116,7 +116,7 @@ BASH
     chmod($script, 0755);
 
     $config = makeRunnerConfig("bash {$script}");
-    $runner = new ClaudeCodeRunner($config, new NullLogger());
+    $runner = new ClaudeCodeRunner($config, new NullLogger);
     $result = $runner->run('test prompt', sys_get_temp_dir());
 
     expect($result['success'])->toBeTrue();
@@ -151,7 +151,7 @@ BASH
     ]);
     putenv('MAX_TURNS_API_KEY');
 
-    $runner = new ClaudeCodeRunner($config, new NullLogger());
+    $runner = new ClaudeCodeRunner($config, new NullLogger);
     $result = $runner->run('test prompt', sys_get_temp_dir());
 
     expect($result['success'])->toBeFalse();

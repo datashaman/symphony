@@ -12,8 +12,11 @@ use Psr\Log\LoggerInterface;
 class JiraTracker implements TrackerInterface
 {
     private PendingRequest $http;
+
     private string $baseUrl;
+
     private string $projectSlug;
+
     private array $activeStates;
 
     public function __construct(
@@ -22,7 +25,7 @@ class JiraTracker implements TrackerInterface
         ?PendingRequest $http = null,
     ) {
         $endpoint = $config->trackerEndpoint();
-        if (!$endpoint) {
+        if (! $endpoint) {
             throw new InvalidArgumentException('Jira tracker requires tracker.endpoint');
         }
 
@@ -72,7 +75,7 @@ class JiraTracker implements TrackerInterface
         return $states;
     }
 
-    public function ensureLabels(): array
+    public function ensureLabels(array $extraLabels = []): array
     {
         // Jira uses workflow statuses, not labels — no-op
         return [];
@@ -86,7 +89,7 @@ class JiraTracker implements TrackerInterface
             return $customJql;
         }
 
-        $quotedStates = array_map(fn($s) => '"' . addslashes($s) . '"', $states);
+        $quotedStates = array_map(fn ($s) => '"'.addslashes($s).'"', $states);
         $stateList = implode(',', $quotedStates);
 
         $clauses = [
@@ -142,7 +145,7 @@ class JiraTracker implements TrackerInterface
         $fields = $data['fields'] ?? [];
         $key = $data['key'];
         $blockedBy = $this->extractBlockedBy($fields['issuelinks'] ?? []);
-        $branchName = 'symphony/' . preg_replace('/[^A-Za-z0-9._-]/', '_', $key);
+        $branchName = 'symphony/'.preg_replace('/[^A-Za-z0-9._-]/', '_', $key);
 
         return new Issue(
             id: (string) $data['id'],

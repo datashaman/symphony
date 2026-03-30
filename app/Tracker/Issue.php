@@ -8,23 +8,34 @@ use DateTimeZone;
 class Issue
 {
     public readonly string $id;
+
     public readonly string $identifier;
+
     public readonly string $title;
+
     public readonly string $description;
+
     public readonly ?int $priority;
+
     public readonly string $state;
+
     public readonly string $branchName;
+
     public readonly string $url;
+
     /** @var string[] */
     public readonly array $labels;
+
     /** @var string[] */
     public readonly array $blockedBy;
+
     public readonly DateTimeImmutable $createdAt;
+
     public readonly DateTimeImmutable $updatedAt;
 
     /**
-     * @param string[] $labels
-     * @param string[] $blockedBy
+     * @param  string[]  $labels
+     * @param  string[]  $blockedBy
      */
     public function __construct(
         string $id,

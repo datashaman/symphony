@@ -51,13 +51,13 @@ it('initializes with empty state', function () {
     $config = makeOrchestratorConfig();
     $tracker = Mockery::mock(TrackerInterface::class);
     $workspace = Mockery::mock(WorkspaceManager::class);
-    $promptBuilder = new PromptBuilder();
+    $promptBuilder = new PromptBuilder;
     $agentRunner = Mockery::mock(ClaudeCodeRunner::class);
     $workflowLoader = Mockery::mock(WorkflowLoader::class);
 
     $orchestrator = new Orchestrator(
         $config, $tracker, $workspace, $promptBuilder,
-        $agentRunner, $workflowLoader, new NullLogger()
+        $agentRunner, $workflowLoader, new NullLogger
     );
 
     expect($orchestrator->getRunning())->toBe([]);
@@ -113,17 +113,82 @@ it('calculates exponential backoff correctly', function () {
     expect(min(10000 * (int) pow(2, 9), 300000))->toBe(300000);
 });
 
-it('handles graceful shutdown request', function () {
-    $config = makeOrchestratorConfig();
+it('filters eligible issues by pipeline stage labels', function () {
+    putenv('ORCH_API_KEY=test');
+    $config = new WorkflowConfig([
+        'tracker' => [
+            'kind' => 'github',
+            'api_key' => '$ORCH_API_KEY',
+            'active_states' => ['todo', 'in-progress'],
+            'terminal_states' => ['done', 'closed'],
+        ],
+        'pipeline' => [
+            'stages' => [
+                ['name' => 'plan', 'trigger' => 'stage:plan', 'command' => 'claude -p --model opus'],
+                ['name' => 'implement', 'trigger' => 'stage:implement'],
+            ],
+        ],
+    ], ['plan' => 'Plan prompt', 'implement' => 'Implement prompt']);
+    putenv('ORCH_API_KEY');
     $tracker = Mockery::mock(TrackerInterface::class);
     $workspace = Mockery::mock(WorkspaceManager::class);
-    $promptBuilder = new PromptBuilder();
+    $promptBuilder = new PromptBuilder;
     $agentRunner = Mockery::mock(ClaudeCodeRunner::class);
     $workflowLoader = Mockery::mock(WorkflowLoader::class);
 
     $orchestrator = new Orchestrator(
         $config, $tracker, $workspace, $promptBuilder,
-        $agentRunner, $workflowLoader, new NullLogger()
+        $agentRunner, $workflowLoader, new NullLogger
+    );
+
+    // Issue with stage:plan label should be eligible for plan stage
+    $issueWithPlan = new Issue(
+        id: '1', identifier: 'test#1', title: 'Issue 1',
+        description: '', priority: null, state: 'todo',
+        branchName: 'symphony/test_1', url: '',
+        labels: ['todo', 'stage:plan'], blockedBy: [],
+        createdAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
+        updatedAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
+    );
+
+    // Issue without stage label should NOT be eligible
+    $issueNoStage = new Issue(
+        id: '2', identifier: 'test#2', title: 'Issue 2',
+        description: '', priority: null, state: 'todo',
+        branchName: 'symphony/test_2', url: '',
+        labels: ['todo'], blockedBy: [],
+        createdAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
+        updatedAt: new DateTimeImmutable('2025-01-01T00:00:00Z'),
+    );
+
+    $tracker->shouldReceive('fetchCandidateIssues')->andReturn([$issueWithPlan, $issueNoStage]);
+    $tracker->shouldReceive('fetchStatesByIds')->andReturn([]);
+    $workflowLoader->shouldReceive('load')->andReturn([
+        'config' => [], 'prompt' => '', 'stage_prompts' => ['plan' => 'Plan it', 'implement' => 'Do it'],
+    ]);
+
+    // dispatch will fork — we can't test that directly, but we can verify
+    // that after tick() the claimed map uses stage-suffixed keys
+    // We need to prevent actual fork, so just test filterEligible via reflection
+    $method = new ReflectionMethod($orchestrator, 'filterEligible');
+    $eligible = $method->invoke($orchestrator, [$issueWithPlan, $issueNoStage]);
+
+    expect($eligible)->toHaveCount(1);
+    expect($eligible[0]['issue']->id)->toBe('1');
+    expect($eligible[0]['stage']->name)->toBe('plan');
+});
+
+it('handles graceful shutdown request', function () {
+    $config = makeOrchestratorConfig();
+    $tracker = Mockery::mock(TrackerInterface::class);
+    $workspace = Mockery::mock(WorkspaceManager::class);
+    $promptBuilder = new PromptBuilder;
+    $agentRunner = Mockery::mock(ClaudeCodeRunner::class);
+    $workflowLoader = Mockery::mock(WorkflowLoader::class);
+
+    $orchestrator = new Orchestrator(
+        $config, $tracker, $workspace, $promptBuilder,
+        $agentRunner, $workflowLoader, new NullLogger
     );
 
     expect($orchestrator->isShutdown())->toBeFalse();

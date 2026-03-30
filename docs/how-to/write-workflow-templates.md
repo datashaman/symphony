@@ -133,6 +133,95 @@ After completing all work, you MUST commit, push, and open a pull request.
 
 In multi-stage pipelines, only add this to the final stage (e.g., `implement`), not intermediate stages like `plan`.
 
+## Multi-Stage Pipelines
+
+Workflow files support defining multiple stages (e.g., plan then implement) using the `pipeline` config section and `---stage:name---` prompt delimiters.
+
+### Pipeline Workflow Format
+
+```
+---
+<YAML configuration with pipeline.stages>
+---
+
+<optional default prompt>
+
+---stage:plan---
+
+<planner prompt template>
+
+---stage:implement---
+
+<implementer prompt template>
+```
+
+### How Stage Dispatch Works
+
+Each stage has a `trigger` label. When an issue has that label, the orchestrator dispatches it to the matching stage's agent with that stage's prompt and claude settings. Stage transitions are driven by changing labels on the tracker (manually or by the agent itself).
+
+### Example: Research → Implement Pipeline
+
+```
+---
+tracker:
+  kind: github
+  repository: myorg/myrepo
+  api_key: $GITHUB_TOKEN
+  active_states:
+    - todo
+    - in-progress
+
+pipeline:
+  stages:
+    - name: plan
+      trigger: stage:plan
+      command: claude -p --verbose --output-format stream-json --model claude-opus-4-6
+      max_turns: 10
+    - name: implement
+      trigger: stage:implement
+      command: claude -p --verbose --output-format stream-json --model claude-sonnet-4-6 --dangerously-skip-permissions
+      max_turns: 30
+---
+
+---stage:plan---
+
+You are a senior architect analyzing issue {{ issue.identifier }}: {{ issue.title }}
+
+{{ issue.description }}
+
+Your job is to:
+1. Understand the requirements
+2. Research the codebase for relevant context
+3. Produce a detailed implementation plan
+
+When your plan is ready, write it as a comment on the issue. Then remove the `stage:plan` label and add the `stage:implement` label.
+
+---stage:implement---
+
+You are an expert engineer implementing issue {{ issue.identifier }}: {{ issue.title }}
+
+{{ issue.description }}
+
+Read the planning comments on this issue for context and implementation guidance. Follow the plan closely.
+
+{% if attempt %}
+This is retry attempt {{ attempt }}. Check git log and test output to continue.
+{% endif %}
+```
+
+### Per-Stage Settings
+
+Each stage can override these claude settings:
+
+| Key | Description |
+|-----|-------------|
+| `command` | Full claude CLI command (set model, flags, etc.) |
+| `max_turns` | Maximum turns for this stage |
+| `turn_timeout_ms` | Per-turn wall-clock timeout |
+| `stall_timeout_ms` | Max time without output |
+
+Settings not specified in a stage fall back to the global `claude` and `agent` defaults.
+
 ## Tips
 
 - The template uses Twig with `strict_variables: true` — referencing an undefined variable will error
@@ -140,3 +229,4 @@ In multi-stage pipelines, only add this to the final stage (e.g., `implement`), 
 - DateTimes are converted to ISO 8601 strings before rendering
 - Keep prompts focused: the more specific the instructions, the better the agent performs
 - Use `{% if attempt %}` to give retry-specific guidance
+- Pipeline trigger labels are auto-created on GitHub at startup

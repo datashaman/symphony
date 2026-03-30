@@ -30,10 +30,14 @@ class WorkflowConfig
 
     private array $resolved;
 
-    public function __construct(array $raw)
+    /** @var StageConfig[] */
+    private array $stages = [];
+
+    public function __construct(array $raw, array $stagePrompts = [])
     {
         $this->resolved = $this->resolveEnvVars($this->mergeDefaults($raw));
         $this->validate();
+        $this->buildStages($stagePrompts);
     }
 
     public function trackerKind(): string
@@ -185,7 +189,7 @@ class WorkflowConfig
     private function resolveEnvVars(array $config): array
     {
         array_walk_recursive($config, function (&$value) {
-            if (!is_string($value)) {
+            if (! is_string($value)) {
                 return;
             }
 
@@ -206,15 +210,75 @@ class WorkflowConfig
         return $config;
     }
 
+    /**
+     * @return StageConfig[]
+     */
+    public function stages(): array
+    {
+        return $this->stages;
+    }
+
+    public function hasPipeline(): bool
+    {
+        return ! empty($this->stages);
+    }
+
+    public function stageForLabels(array $labels): ?StageConfig
+    {
+        $labels = array_map('strtolower', $labels);
+
+        foreach ($this->stages as $stage) {
+            if (in_array($stage->trigger, $labels, true)) {
+                return $stage;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the trigger labels for all pipeline stages.
+     *
+     * @return string[]
+     */
+    public function pipelineTriggerLabels(): array
+    {
+        return array_map(fn (StageConfig $s) => $s->trigger, $this->stages);
+    }
+
+    private function buildStages(array $stagePrompts): void
+    {
+        $rawStages = $this->resolved['pipeline']['stages'] ?? [];
+        if (empty($rawStages)) {
+            return;
+        }
+
+        $claudeDefaults = $this->resolved['claude'];
+        $claudeDefaults['max_turns'] = $this->resolved['agent']['max_turns'];
+
+        foreach ($rawStages as $stage) {
+            $name = $stage['name'] ?? '';
+            $prompt = $stagePrompts[$name] ?? '';
+
+            if ($prompt === '') {
+                throw new InvalidArgumentException(
+                    "Pipeline stage '{$name}' has no matching prompt section (expected ---stage:{$name}---)"
+                );
+            }
+
+            $this->stages[] = new StageConfig($stage, $claudeDefaults, $prompt);
+        }
+    }
+
     private function validate(): void
     {
-        if (!isset($this->resolved['tracker']['kind'])) {
+        if (! isset($this->resolved['tracker']['kind'])) {
             throw new InvalidArgumentException('Missing required config: tracker.kind');
         }
 
-        if (!in_array($this->resolved['tracker']['kind'], self::SUPPORTED_TRACKERS, true)) {
+        if (! in_array($this->resolved['tracker']['kind'], self::SUPPORTED_TRACKERS, true)) {
             throw new InvalidArgumentException(
-                "Unsupported tracker kind '{$this->resolved['tracker']['kind']}'. Supported: " . implode(', ', self::SUPPORTED_TRACKERS)
+                "Unsupported tracker kind '{$this->resolved['tracker']['kind']}'. Supported: ".implode(', ', self::SUPPORTED_TRACKERS)
             );
         }
 

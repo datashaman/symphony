@@ -37,7 +37,7 @@ it('fetches candidate issues', function () {
         ]),
     ]);
 
-    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(1);
@@ -75,7 +75,7 @@ it('handles pagination via Link header', function () {
             ]),
     ]);
 
-    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(2);
@@ -95,7 +95,7 @@ it('fetches states by IDs for reconciliation', function () {
         ]),
     ]);
 
-    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $states = $tracker->fetchStatesByIds(['42', '99']);
 
     expect($states)->toBe(['42' => 'todo', '99' => 'done']);
@@ -116,7 +116,7 @@ it('detects blocked-by from issue body', function () {
         ]),
     ]);
 
-    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues[0]->blockedBy)->toBe(['123', '456']);
@@ -137,7 +137,7 @@ it('extracts priority from labels', function () {
         ]),
     ]);
 
-    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues[0]->priority)->toBe(1);
@@ -168,7 +168,7 @@ it('skips pull requests in issues response', function () {
         ]),
     ]);
 
-    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger());
+    $tracker = new GitHubTracker(makeGitHubConfig(), new NullLogger);
     $issues = $tracker->fetchCandidateIssues();
 
     expect($issues)->toHaveCount(1);
