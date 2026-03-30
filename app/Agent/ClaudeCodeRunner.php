@@ -32,7 +32,9 @@ class ClaudeCodeRunner
             2 => ['pipe', 'w'], // stderr
         ];
 
-        $process = proc_open($command, $descriptors, $pipes, $workspacePath);
+        // Use CWD as working directory — --worktree handles isolation
+        $cwd = str_contains($command, '--worktree') ? getcwd() : $workspacePath;
+        $process = proc_open($command, $descriptors, $pipes, $cwd);
 
         if (!is_resource($process)) {
             throw new RuntimeException("Failed to launch Claude Code: {$command}");

@@ -41,24 +41,27 @@ class GitHubTracker implements TrackerInterface
 
     public function fetchCandidateIssues(): array
     {
-        $labels = implode(',', $this->activeStates);
-
-        return $this->fetchIssuesWithPagination("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues", [
+        $allIssues = $this->fetchIssuesWithPagination("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues", [
             'state' => 'open',
-            'labels' => $labels,
             'per_page' => 100,
         ]);
+
+        return array_values(array_filter($allIssues, fn(Issue $issue) =>
+            in_array(strtolower($issue->state), $this->activeStates, true)
+        ));
     }
 
     public function fetchIssuesByStates(array $states): array
     {
-        $labels = implode(',', array_map('strtolower', $states));
-
-        return $this->fetchIssuesWithPagination("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues", [
+        $states = array_map('strtolower', $states);
+        $allIssues = $this->fetchIssuesWithPagination("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/issues", [
             'state' => 'open',
-            'labels' => $labels,
             'per_page' => 100,
         ]);
+
+        return array_values(array_filter($allIssues, fn(Issue $issue) =>
+            in_array(strtolower($issue->state), $states, true)
+        ));
     }
 
     public function fetchStatesByIds(array $ids): array

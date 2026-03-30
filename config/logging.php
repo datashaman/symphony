@@ -19,7 +19,7 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stderr'),
+    'default' => env('LOG_CHANNEL', 'symphony'),
 
     /*
     |--------------------------------------------------------------------------
@@ -52,6 +52,21 @@ return [
     */
 
     'channels' => [
+
+        'symphony' => [
+            'driver' => 'stack',
+            'channels' => ['stderr', 'file'],
+            'ignore_exceptions' => false,
+        ],
+
+        'file' => [
+            'driver' => 'single',
+            'path' => \Phar::running()
+                ? dirname(\Phar::running(false)) . '/symphony.log'
+                : getcwd() . '/symphony.log',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'formatter' => StructuredFormatter::class,
+        ],
 
         'stack' => [
             'driver' => 'stack',

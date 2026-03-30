@@ -81,6 +81,12 @@ class Orchestrator
         // 3. Fetch candidates
         $candidates = $this->tracker->fetchCandidateIssues();
 
+        $this->logger->info('Tick', [
+            'candidates' => count($candidates),
+            'running' => count($this->running),
+            'retry_queue' => count($this->retryQueue),
+        ]);
+
         // 4. Sort: priority ASC, createdAt ASC, identifier ASC
         usort($candidates, function (Issue $a, Issue $b) {
             $pa = $a->priority ?? PHP_INT_MAX;
@@ -98,6 +104,13 @@ class Orchestrator
 
         // 5. Filter eligible
         $eligible = $this->filterEligible($candidates);
+
+        if (count($eligible) > 0) {
+            $this->logger->info('Eligible issues', [
+                'count' => count($eligible),
+                'issues' => array_map(fn(Issue $i) => $i->identifier, $eligible),
+            ]);
+        }
 
         // 6. Dispatch
         $availableSlots = $this->config->maxConcurrentAgents() - count($this->running);
