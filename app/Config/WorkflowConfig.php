@@ -86,14 +86,14 @@ class WorkflowConfig
         return $this->resolved['workspace']['root'] ?? '';
     }
 
-    public function workspaceHooks(): array
+    public function workspaceSetup(): array
     {
-        return $this->resolved['workspace']['hooks'] ?? [];
+        return (array) ($this->resolved['workspace']['setup'] ?? []);
     }
 
-    public function hooksTimeoutMs(): int
+    public function setupTimeoutMs(): int
     {
-        return $this->resolved['hooks']['timeout_ms'] ?? 60000;
+        return $this->resolved['workspace']['setup_timeout_ms'] ?? 60000;
     }
 
     public function maxConcurrentAgents(): int

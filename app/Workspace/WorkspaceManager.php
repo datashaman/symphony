@@ -92,13 +92,8 @@ class WorkspaceManager
                 ]);
                 $this->git("worktree add {$this->escape($path)} -b {$this->escape($branch)} {$this->escape($this->baseBranch)}");
             }
-        }
-
-        $hooks = $this->config->workspaceHooks();
-        if (isset($hooks['after_create'])) {
-            foreach ((array) $hooks['after_create'] as $command) {
-                $this->runHook('after_create', $command, $path);
-            }
+            // Run setup commands for new worktrees
+            $this->runSetup($path);
         }
 
         return $path;
@@ -109,17 +104,6 @@ class WorkspaceManager
         $path = $this->pathForIssue($issue);
         $branch = $issue->branchName;
 
-        $hooks = $this->config->workspaceHooks();
-        if (isset($hooks['before_remove'])) {
-            foreach ((array) $hooks['before_remove'] as $command) {
-                try {
-                    $this->runHook('before_remove', $command, $path);
-                } catch (RuntimeException $e) {
-                    $this->logger->warning("before_remove hook failed: {$e->getMessage()}");
-                }
-            }
-        }
-
         // Remove worktree
         if (is_dir($path)) {
             $this->gitSafe("worktree remove --force {$this->escape($path)}");
@@ -129,6 +113,20 @@ class WorkspaceManager
 
         // Delete the branch
         $this->gitSafe("branch -D {$this->escape($branch)}");
+    }
+
+    private function runSetup(string $workspacePath): void
+    {
+        $commands = $this->config->workspaceSetup();
+        if (empty($commands)) {
+            return;
+        }
+
+        foreach ($commands as $command) {
+            // Substitute %BASE% with the repo root path
+            $command = str_replace('%BASE%', $this->repoRoot, $command);
+            $this->runHook('setup', $command, $workspacePath);
+        }
     }
 
     public function runHook(string $phase, string $command, string $workspacePath): void
@@ -152,7 +150,7 @@ class WorkspaceManager
 
         fclose($pipes[0]);
 
-        $timeoutMs = $this->config->hooksTimeoutMs();
+        $timeoutMs = $this->config->setupTimeoutMs();
         $startTime = hrtime(true);
         $stdout = '';
         $stderr = '';
@@ -190,7 +188,7 @@ class WorkspaceManager
         $exitCode = proc_close($process);
 
         if ($exitCode !== 0) {
-            $isFatal = in_array($phase, ['after_create', 'before_run']);
+            $isFatal = in_array($phase, ['setup', 'after_create', 'before_run']);
             $message = "Hook '{$phase}' exited with code {$exitCode}: {$command}";
 
             if ($stderr) {
@@ -248,17 +246,6 @@ class WorkspaceManager
                     'path' => $wt['path'],
                     'branch' => $wt['branch'],
                 ]);
-
-                $hooks = $this->config->workspaceHooks();
-                if (isset($hooks['before_remove'])) {
-                    foreach ((array) $hooks['before_remove'] as $command) {
-                        try {
-                            $this->runHook('before_remove', $command, $wt['path']);
-                        } catch (RuntimeException $e) {
-                            $this->logger->warning("before_remove hook failed during cleanup: {$e->getMessage()}");
-                        }
-                    }
-                }
 
                 $this->gitSafe("worktree remove --force {$this->escape($wt['path'])}");
                 if ($wt['branch']) {

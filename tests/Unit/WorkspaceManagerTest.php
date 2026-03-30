@@ -17,12 +17,11 @@ function makeTestGitRepo(): string
 
 function cleanupTestRepo(string $repo): void
 {
-    // Prune worktrees first, then delete
     exec("git -C {$repo} worktree prune 2>&1");
     exec("rm -rf {$repo} 2>&1");
 }
 
-function makeWsConfig(string $root, array $hooks = []): WorkflowConfig
+function makeWsConfig(string $root, array $setup = []): WorkflowConfig
 {
     putenv('WS_API_KEY=test');
     $config = new WorkflowConfig([
@@ -32,7 +31,7 @@ function makeWsConfig(string $root, array $hooks = []): WorkflowConfig
         ],
         'workspace' => [
             'root' => $root,
-            'hooks' => $hooks,
+            'setup' => $setup,
         ],
     ]);
     putenv('WS_API_KEY');
@@ -60,7 +59,7 @@ function makeTestIssue(string $identifier = 'symphony#42', string $branchName = 
 
 it('computes workspace path with identifier sanitization', function () {
     $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
+    $root = $repo . '/.symphony/worktrees';
     $config = makeWsConfig($root);
 
     $origDir = getcwd();
@@ -78,7 +77,7 @@ it('computes workspace path with identifier sanitization', function () {
 
 it('prevents path traversal', function () {
     $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
+    $root = $repo . '/.symphony/worktrees';
     $config = makeWsConfig($root);
 
     $origDir = getcwd();
@@ -92,11 +91,16 @@ it('prevents path traversal', function () {
     cleanupTestRepo($repo);
 });
 
-it('creates worktree and runs after_create hook', function () {
+it('creates worktree and runs setup commands', function () {
     $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
+    $root = $repo . '/.symphony/worktrees';
+
+    // Create a file in the repo root to copy during setup
+    file_put_contents($repo . '/.env', 'APP_KEY=test123');
+
     $config = makeWsConfig($root, [
-        'after_create' => ['touch created.txt'],
+        'cp %BASE%/.env .',
+        'touch setup-done.txt',
     ]);
 
     $origDir = getcwd();
@@ -107,10 +111,39 @@ it('creates worktree and runs after_create hook', function () {
     $path = $manager->create($issue);
 
     expect(is_dir($path))->toBeTrue();
-    expect(file_exists($path . '/created.txt'))->toBeTrue();
-
-    // Verify it's a real worktree
     expect(file_exists($path . '/.git'))->toBeTrue();
+    expect(file_exists($path . '/.env'))->toBeTrue();
+    expect(file_get_contents($path . '/.env'))->toBe('APP_KEY=test123');
+    expect(file_exists($path . '/setup-done.txt'))->toBeTrue();
+
+    chdir($origDir);
+    cleanupTestRepo($repo);
+});
+
+it('does not run setup when reusing worktree', function () {
+    $repo = makeTestGitRepo();
+    $root = $repo . '/.symphony/worktrees';
+    $config = makeWsConfig($root, [
+        'echo "setup-ran" > setup-marker.txt',
+    ]);
+
+    $origDir = getcwd();
+    chdir($repo);
+
+    $manager = new WorkspaceManager($config, new NullLogger());
+    $issue = makeTestIssue('reuse-test', 'symphony/test-reuse');
+
+    // First create — setup runs
+    $path = $manager->create($issue);
+    expect(file_exists($path . '/setup-marker.txt'))->toBeTrue();
+
+    // Remove the marker
+    unlink($path . '/setup-marker.txt');
+
+    // Second create — reuses worktree, setup should NOT run
+    $path2 = $manager->create($issue);
+    expect($path2)->toBe($path);
+    expect(file_exists($path . '/setup-marker.txt'))->toBeFalse();
 
     chdir($origDir);
     cleanupTestRepo($repo);
@@ -118,7 +151,7 @@ it('creates worktree and runs after_create hook', function () {
 
 it('removes worktree and branch', function () {
     $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
+    $root = $repo . '/.symphony/worktrees';
     $config = makeWsConfig($root);
 
     $origDir = getcwd();
@@ -133,7 +166,6 @@ it('removes worktree and branch', function () {
     $manager->remove($issue);
     expect(is_dir($path))->toBeFalse();
 
-    // Branch should be gone too
     $exitCode = 0;
     exec("git -C {$repo} show-ref --verify --quiet refs/heads/symphony/test-remove 2>/dev/null", $output, $exitCode);
     expect($exitCode)->not->toBe(0);
@@ -142,51 +174,25 @@ it('removes worktree and branch', function () {
     cleanupTestRepo($repo);
 });
 
-it('treats after_create hook failure as fatal', function () {
+it('setup failure is fatal', function () {
     $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
-    $config = makeWsConfig($root, [
-        'after_create' => ['exit 1'],
-    ]);
+    $root = $repo . '/.symphony/worktrees';
+    $config = makeWsConfig($root, ['exit 1']);
 
     $origDir = getcwd();
     chdir($repo);
 
     try {
         $manager = new WorkspaceManager($config, new NullLogger());
-        $issue = makeTestIssue('fatal-hook', 'symphony/test-fatal');
+        $issue = makeTestIssue('fatal-setup', 'symphony/test-fatal');
         $manager->create($issue);
     } finally {
         chdir($origDir);
         cleanupTestRepo($repo);
     }
-})->throws(RuntimeException::class, 'after_create');
+})->throws(RuntimeException::class, 'setup');
 
-it('treats before_remove hook failure as non-fatal', function () {
-    $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
-    $config = makeWsConfig($root, [
-        'before_remove' => ['exit 1'],
-    ]);
-
-    $origDir = getcwd();
-    chdir($repo);
-
-    $manager = new WorkspaceManager($config, new NullLogger());
-    $issue = makeTestIssue('nonfatal-hook', 'symphony/test-nonfatal');
-
-    $path = $manager->create($issue);
-    expect(is_dir($path))->toBeTrue();
-
-    // Should not throw despite hook failure
-    $manager->remove($issue);
-    expect(is_dir($path))->toBeFalse();
-
-    chdir($origDir);
-    cleanupTestRepo($repo);
-});
-
-it('enforces hook timeout', function () {
+it('enforces setup timeout', function () {
     $repo = makeTestGitRepo();
 
     $origDir = getcwd();
@@ -198,15 +204,18 @@ it('enforces hook timeout', function () {
             'kind' => 'github',
             'api_key' => '$WS_API_KEY',
         ],
-        'workspace' => ['root' => $repo . '/.symphony-worktrees'],
-        'hooks' => ['timeout_ms' => 100],
+        'workspace' => [
+            'root' => $repo . '/.symphony/worktrees',
+            'setup' => ['sleep 10'],
+            'setup_timeout_ms' => 100,
+        ],
     ]);
     putenv('WS_API_KEY');
 
-    $manager = new WorkspaceManager($config, new NullLogger());
-
     try {
-        $manager->runHook('after_create', 'sleep 10', $repo);
+        $manager = new WorkspaceManager($config, new NullLogger());
+        $issue = makeTestIssue('timeout-test', 'symphony/test-timeout');
+        $manager->create($issue);
     } finally {
         chdir($origDir);
         cleanupTestRepo($repo);
@@ -215,7 +224,7 @@ it('enforces hook timeout', function () {
 
 it('reuses existing branch on retry', function () {
     $repo = makeTestGitRepo();
-    $root = $repo . '/.symphony-worktrees';
+    $root = $repo . '/.symphony/worktrees';
     $config = makeWsConfig($root);
 
     $origDir = getcwd();
@@ -224,21 +233,15 @@ it('reuses existing branch on retry', function () {
     $manager = new WorkspaceManager($config, new NullLogger());
     $issue = makeTestIssue('retry-test', 'symphony/test-retry');
 
-    // First create
     $path = $manager->create($issue);
     expect(is_dir($path))->toBeTrue();
 
-    // Add a file in the worktree to verify state persists
     file_put_contents($path . '/work.txt', 'progress');
 
-    // Remove worktree but keep branch
     exec("git -C {$repo} worktree remove --force {$path} 2>&1");
 
-    // Second create should reuse existing branch
     $path2 = $manager->create($issue);
     expect(is_dir($path2))->toBeTrue();
-    // The branch exists, so the committed work from before would be there
-    // (uncommitted work is lost with worktree remove, which is expected)
 
     chdir($origDir);
     cleanupTestRepo($repo);
