@@ -5,13 +5,20 @@ namespace App\Agent;
 use App\Config\WorkflowConfig;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
+use Symfony\Component\Console\Output\OutputInterface;
 
 class ClaudeCodeRunner
 {
     public function __construct(
         private WorkflowConfig $config,
         private LoggerInterface $logger,
+        private ?OutputInterface $output = null,
     ) {}
+
+    private function console(string $message): void
+    {
+        $this->output?->writeln($message);
+    }
 
     /**
      * Run a single turn of the Claude Code agent.
@@ -244,10 +251,12 @@ class ClaudeCodeRunner
                             default => '',
                         };
                         $this->logger->info("Tool: {$toolName}", ['detail' => $summary]);
+                        $this->console("    <comment>{$toolName}</comment> {$summary}");
                     } elseif (($block['type'] ?? '') === 'text') {
                         $text = mb_strimwidth($block['text'] ?? '', 0, 200, '...');
                         if ($text !== '') {
                             $this->logger->info('Claude', ['text' => $text]);
+                            $this->console("    {$text}");
                         }
                     }
                 }
@@ -263,6 +272,8 @@ class ClaudeCodeRunner
                     'duration_s' => $duration,
                     'cost_usd' => round($cost, 4),
                 ]);
+                $tag = $subtype === 'success' ? 'info' : 'comment';
+                $this->console("    <{$tag}>Result: {$subtype}</{$tag}> ({$duration}s, \${$cost})");
                 break;
 
             case 'system':

@@ -45,7 +45,7 @@ class RunCommand extends Command
             // Create components
             $workspace = new WorkspaceManager($config, $logger);
             $promptBuilder = new PromptBuilder();
-            $agentRunner = new ClaudeCodeRunner($config, $logger);
+            $agentRunner = new ClaudeCodeRunner($config, $logger, $this->output);
 
             // Create orchestrator
             $orchestrator = new Orchestrator(
