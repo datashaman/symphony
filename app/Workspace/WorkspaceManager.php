@@ -53,7 +53,20 @@ class WorkspaceManager
         $path = $this->pathForIssue($issue);
         $branch = $issue->branchName;
 
-        if (!is_dir($path)) {
+        if (is_dir($path) && file_exists($path . '/.git')) {
+            // Worktree already exists — reuse it
+            $this->logger->info('Reusing existing worktree', [
+                'branch' => $branch,
+                'path' => $path,
+            ]);
+        } else {
+            // Clean up stale directory if it exists but isn't a worktree
+            if (is_dir($path)) {
+                $this->logger->info('Removing stale workspace directory', ['path' => $path]);
+                $this->recursiveDelete($path);
+                $this->gitSafe('worktree prune');
+            }
+
             if ($this->branchExists($branch)) {
                 $this->logger->info('Creating worktree with existing branch', [
                     'branch' => $branch,
