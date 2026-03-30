@@ -12,6 +12,11 @@ tracker:
     - Done
     - Closed
     - Cancelled
+  # assignee: currentUser()    # default — only your tickets
+  # sprint: openSprints()      # default — current sprint only
+  # assignee: none             # all assignees
+  # sprint: none               # all sprints
+  # jql: "project = SOL AND ..." # full override
 
 polling:
   interval_ms: 30000

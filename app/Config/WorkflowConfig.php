@@ -66,6 +66,21 @@ class WorkflowConfig
         return $this->resolved['tracker']['project_slug'] ?? null;
     }
 
+    public function trackerAssignee(): string
+    {
+        return $this->resolved['tracker']['assignee'] ?? 'currentUser()';
+    }
+
+    public function trackerSprint(): string
+    {
+        return $this->resolved['tracker']['sprint'] ?? 'openSprints()';
+    }
+
+    public function trackerJql(): ?string
+    {
+        return $this->resolved['tracker']['jql'] ?? null;
+    }
+
     public function trackerActiveStates(): array
     {
         return $this->resolved['tracker']['active_states'];

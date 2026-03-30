@@ -15,7 +15,6 @@ class JiraTracker implements TrackerInterface
     private string $baseUrl;
     private string $projectSlug;
     private array $activeStates;
-    private array $terminalStates;
 
     public function __construct(
         private WorkflowConfig $config,
@@ -35,7 +34,6 @@ class JiraTracker implements TrackerInterface
             ?? throw new InvalidArgumentException('Jira tracker requires tracker.email');
 
         $this->activeStates = $config->trackerActiveStates();
-        $this->terminalStates = $config->trackerTerminalStates();
 
         $this->http = $http ?? Http::withBasicAuth($email, $config->trackerApiKey())
             ->withHeaders([
@@ -81,10 +79,31 @@ class JiraTracker implements TrackerInterface
 
     private function buildJql(array $states): string
     {
+        // Allow full override via tracker.jql
+        $customJql = $this->config->trackerJql();
+        if ($customJql) {
+            return $customJql;
+        }
+
         $quotedStates = array_map(fn($s) => '"' . addslashes($s) . '"', $states);
         $stateList = implode(',', $quotedStates);
 
-        return "project={$this->projectSlug} AND status in ({$stateList})";
+        $clauses = [
+            "project = {$this->projectSlug}",
+            "status in ({$stateList})",
+        ];
+
+        $assignee = $this->config->trackerAssignee();
+        if ($assignee !== '' && $assignee !== 'none') {
+            $clauses[] = "assignee = {$assignee}";
+        }
+
+        $sprint = $this->config->trackerSprint();
+        if ($sprint !== '' && $sprint !== 'none') {
+            $clauses[] = "sprint in {$sprint}";
+        }
+
+        return implode(' AND ', $clauses);
     }
 
     /**
