@@ -81,6 +81,29 @@ class GitHubTracker implements TrackerInterface
         return $states;
     }
 
+    public function ensureLabels(): void
+    {
+        $response = $this->http->get("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/labels", [
+            'per_page' => 100,
+        ]);
+        $existing = array_map(fn($l) => strtolower($l['name']), $response->json());
+
+        $needed = array_unique(array_merge($this->activeStates, $this->terminalStates));
+
+        foreach ($needed as $label) {
+            if (!in_array($label, $existing, true)) {
+                try {
+                    $this->http->post("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/labels", [
+                        'name' => $label,
+                    ]);
+                    $this->logger->info("Created label: {$label}");
+                } catch (\Exception $e) {
+                    $this->logger->warning("Failed to create label '{$label}': {$e->getMessage()}");
+                }
+            }
+        }
+    }
+
     /**
      * @return Issue[]
      */

@@ -62,6 +62,9 @@ class Orchestrator
         $this->console("  Polling every {$this->config->pollingIntervalMs()}ms, max {$this->config->maxConcurrentAgents()} concurrent agents");
         $this->logger->info('Orchestrator starting');
 
+        // Ensure configured labels exist on the tracker
+        $this->tracker->ensureLabels();
+
         // Startup cleanup
         $this->workspace->cleanupTerminal($this->tracker);
 

@@ -74,6 +74,11 @@ class JiraTracker implements TrackerInterface
         return $states;
     }
 
+    public function ensureLabels(): void
+    {
+        // Jira uses workflow statuses, not labels — no-op
+    }
+
     private function buildJql(array $states): string
     {
         $quotedStates = array_map(fn($s) => '"' . addslashes($s) . '"', $states);

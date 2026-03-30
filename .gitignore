@@ -1,7 +1,8 @@
-.env
-/builds
-/vendor
+/.env
 /.idea
-/.vscode
+/.phpunit.result.cache
 /.vagrant
-.phpunit.result.cache
+/.vscode
+/builds
+/symphony.log
+/vendor

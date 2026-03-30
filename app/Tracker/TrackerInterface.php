@@ -26,4 +26,11 @@ interface TrackerInterface
      * @return array<string, string> Map of id => state
      */
     public function fetchStatesByIds(array $ids): array;
+
+    /**
+     * Ensure configured state labels/statuses exist on the tracker.
+     * Creates any that are missing. No-op for trackers that use
+     * built-in workflow statuses (e.g., Jira).
+     */
+    public function ensureLabels(): void;
 }
