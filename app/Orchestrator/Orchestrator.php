@@ -23,6 +23,9 @@ class Orchestrator
     /** @var array<string, array{attempt: int, dueAt: int, error: string}> */
     private array $retryQueue = [];
 
+    /** @var array<string, string> Issue ID → last Claude session ID */
+    private array $sessionIds = [];
+
     /** @var array{input_tokens: int, output_tokens: int, seconds: float} */
     private array $claudeTotals = ['input_tokens' => 0, 'output_tokens' => 0, 'seconds' => 0];
 
@@ -63,7 +66,15 @@ class Orchestrator
         $this->logger->info('Orchestrator starting');
 
         // Ensure configured labels exist on the tracker
-        $this->tracker->ensureLabels();
+        try {
+            $created = $this->tracker->ensureLabels();
+            if (!empty($created)) {
+                $this->console('  Created labels: ' . implode(', ', $created));
+            }
+        } catch (\Exception $e) {
+            $this->logger->warning("Failed to ensure labels: {$e->getMessage()}");
+            $this->console("  <comment>Warning: failed to ensure labels: {$e->getMessage()}</comment>");
+        }
 
         // Startup cleanup
         $this->workspace->cleanupTerminal($this->tracker);
@@ -237,8 +248,17 @@ class Orchestrator
             $workflow = $this->workflowLoader->load();
             $prompt = $this->promptBuilder->render($workflow['prompt'], $issue->toArray(), $attempt);
 
+            // Resume previous session on retry
+            $resumeSessionId = $this->sessionIds[$issue->id] ?? null;
+
             // Run agent
-            $result = $this->agentRunner->run($prompt, $workspacePath);
+            $result = $this->agentRunner->run($prompt, $workspacePath, $resumeSessionId);
+
+            // Write session ID for parent to read back
+            if ($result['session_id']) {
+                $sessionFile = $workspacePath . '/.symphony_session_id';
+                file_put_contents($sessionFile, $result['session_id']);
+            }
 
             $this->logger->info('Agent completed', [
                 'issue_id' => $issue->id,
@@ -246,6 +266,7 @@ class Orchestrator
                 'success' => $result['success'],
                 'tokens' => $result['tokens'],
                 'session_id' => $result['session_id'],
+                'resumed' => $resumeSessionId !== null,
             ]);
 
             return $result['success'] ? 0 : 1;
@@ -284,6 +305,13 @@ class Orchestrator
                     'pid' => $worker['pid'],
                     'exit_code' => $exitCode,
                 ]);
+
+                // Read session ID written by child for future resume
+                $workspacePath = $this->workspace->pathForIssue($worker['issue']);
+                $sessionFile = $workspacePath . '/.symphony_session_id';
+                if (file_exists($sessionFile)) {
+                    $this->sessionIds[$issueId] = trim(file_get_contents($sessionFile));
+                }
 
                 if ($exitCode !== 0) {
                     $this->console("  <comment>Failed</comment> {$issueIdentifier} (exit {$exitCode}), queuing retry");
@@ -340,7 +368,7 @@ class Orchestrator
                     ]);
                     posix_kill($this->running[$id]['pid'], SIGTERM);
                     $this->workspace->remove($this->running[$id]['issue']);
-                    unset($this->running[$id], $this->claimed[$id]);
+                    unset($this->running[$id], $this->claimed[$id], $this->sessionIds[$id]);
                 } elseif (!in_array($stateLower, $activeStates, true)) {
                     // Non-active, non-terminal: kill but preserve workspace
                     $this->logger->info('Issue moved to non-active state, killing worker', [

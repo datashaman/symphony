@@ -48,7 +48,7 @@ app/
 ## Configuration
 
 Workflow files (e.g., `WORKFLOW.md`) contain YAML frontmatter with these sections:
-- `tracker` - kind (github/jira), credentials, active/terminal states, assignee/sprint/jql (Jira)
+- `tracker` - kind (github/jira), credentials, repository (optional, auto-detected from git remote for GitHub), active/terminal states, assignee/sprint/jql (Jira)
 - `polling` - interval_ms (default: 30000)
 - `workspace` - root path, setup commands (array), setup_timeout_ms (default: 60000)
 - `agent` - max_concurrent_agents (default: 10), max_turns (default: 20), max_retry_backoff_ms (default: 300000)

@@ -7,7 +7,6 @@ Set `tracker.kind` to `github` in your workflow file:
 ```yaml
 tracker:
   kind: github
-  repository: owner/repo
   api_key: $GITHUB_TOKEN
   active_states:
     - todo
@@ -30,7 +29,7 @@ Reference it in the workflow as `$GITHUB_TOKEN` or `${GITHUB_TOKEN}`.
 
 ## Repository
 
-Set `tracker.repository` to the `owner/repo` format:
+By default, Symphony auto-detects the repository from the CWD's `origin` git remote. To override, set `tracker.repository` explicitly:
 
 ```yaml
 tracker:
@@ -60,7 +59,7 @@ State determination checks terminal states first, then active states. Issues wit
 
 ## Label Auto-Creation
 
-At startup, Symphony calls `ensureLabels()` which creates any missing `active_states` and `terminal_states` labels on the GitHub repository. This ensures the configured labels exist before polling begins.
+At startup, Symphony attempts to create any missing `active_states` and `terminal_states` labels on the GitHub repository. If label creation fails (e.g., insufficient permissions), a warning is logged but the daemon continues.
 
 ## How Candidate Issues Are Fetched
 
