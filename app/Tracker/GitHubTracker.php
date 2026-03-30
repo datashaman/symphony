@@ -81,7 +81,7 @@ class GitHubTracker implements TrackerInterface
         return $states;
     }
 
-    public function ensureLabels(): void
+    public function ensureLabels(): array
     {
         $response = $this->http->get("{$this->baseUrl}/repos/{$this->owner}/{$this->repo}/labels", [
             'per_page' => 100,
@@ -89,6 +89,7 @@ class GitHubTracker implements TrackerInterface
         $existing = array_map(fn($l) => strtolower($l['name']), $response->json());
 
         $needed = array_unique(array_merge($this->activeStates, $this->terminalStates));
+        $created = [];
 
         foreach ($needed as $label) {
             if (!in_array($label, $existing, true)) {
@@ -97,11 +98,14 @@ class GitHubTracker implements TrackerInterface
                         'name' => $label,
                     ]);
                     $this->logger->info("Created label: {$label}");
+                    $created[] = $label;
                 } catch (\Exception $e) {
                     $this->logger->warning("Failed to create label '{$label}': {$e->getMessage()}");
                 }
             }
         }
+
+        return $created;
     }
 
     /**
