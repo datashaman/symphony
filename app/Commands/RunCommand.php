@@ -50,7 +50,7 @@ class RunCommand extends Command
             // Create orchestrator
             $orchestrator = new Orchestrator(
                 $config, $tracker, $workspace, $promptBuilder,
-                $agentRunner, $loader, $logger
+                $agentRunner, $loader, $logger, $this->output
             );
 
             // Register signal handlers
@@ -64,6 +64,11 @@ class RunCommand extends Command
                 $orchestrator->requestShutdown();
             });
 
+            $this->line('  Press Ctrl+C to stop');
+
+            $this->info("Symphony starting ({$config->trackerKind()} tracker)");
+            $this->line("  Workflow: {$workflowPath}");
+            $this->line("  Log file: " . getcwd() . "/symphony.log");
             Log::info('Symphony starting', [
                 'workflow' => $workflowPath,
                 'tracker' => $config->trackerKind(),

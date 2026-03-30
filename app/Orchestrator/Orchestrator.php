@@ -10,6 +10,7 @@ use App\Tracker\TrackerInterface;
 use App\Workflow\WorkflowLoader;
 use App\Workspace\WorkspaceManager;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 class Orchestrator
 {
@@ -35,11 +36,18 @@ class Orchestrator
         private ClaudeCodeRunner $agentRunner,
         private WorkflowLoader $workflowLoader,
         private LoggerInterface $logger,
+        private ?OutputInterface $output = null,
     ) {}
+
+    private function console(string $message): void
+    {
+        $this->output?->writeln($message);
+    }
 
     public function requestShutdown(): void
     {
         $this->shutdown = true;
+        $this->console('<comment>Shutting down, waiting for running workers...</comment>');
         $this->logger->info('Shutdown requested, waiting for running workers to complete');
     }
 
@@ -50,6 +58,8 @@ class Orchestrator
 
     public function run(): void
     {
+        $this->console('<info>Symphony orchestrator started</info>');
+        $this->console("  Polling every {$this->config->pollingIntervalMs()}ms, max {$this->config->maxConcurrentAgents()} concurrent agents");
         $this->logger->info('Orchestrator starting');
 
         // Startup cleanup
@@ -63,6 +73,7 @@ class Orchestrator
         }
 
         $this->waitForChildren();
+        $this->console('<info>Symphony stopped</info>');
         $this->logger->info('Orchestrator stopped', ['totals' => $this->claudeTotals]);
     }
 
@@ -179,6 +190,7 @@ class Orchestrator
 
     private function dispatch(Issue $issue): void
     {
+        $this->console("  <info>Dispatching</info> {$issue->identifier}: {$issue->title}");
         $this->logger->info('Dispatching issue', [
             'issue_id' => $issue->id,
             'issue_identifier' => $issue->identifier,
@@ -263,6 +275,7 @@ class Orchestrator
                 $exitCode = pcntl_wexitstatus($childStatus);
                 $finishedIds[] = $issueId;
 
+                $issueIdentifier = $worker['issue']->identifier;
                 $this->logger->info('Worker finished', [
                     'issue_id' => $issueId,
                     'pid' => $worker['pid'],
@@ -270,8 +283,10 @@ class Orchestrator
                 ]);
 
                 if ($exitCode !== 0) {
+                    $this->console("  <comment>Failed</comment> {$issueIdentifier} (exit {$exitCode}), queuing retry");
                     $this->queueRetry($issueId, 'failure', $exitCode);
                 } else {
+                    $this->console("  <info>Completed</info> {$issueIdentifier}");
                     unset($this->claimed[$issueId]);
                 }
 
