@@ -1,41 +1,74 @@
-<p align="center">
-    <img title="Laravel Zero" height="100" src="https://raw.githubusercontent.com/laravel-zero/docs/master/images/logo/laravel-zero-readme.png" alt="Laravel Zero Logo" />
-</p>
+# Symphony
 
-<p align="center">
-  <a href="https://github.com/laravel-zero/framework/actions"><img src="https://github.com/laravel-zero/laravel-zero/actions/workflows/tests.yml/badge.svg" alt="Build Status" /></a>
-  <a href="https://packagist.org/packages/laravel-zero/framework"><img src="https://img.shields.io/packagist/dt/laravel-zero/framework.svg" alt="Total Downloads" /></a>
-  <a href="https://packagist.org/packages/laravel-zero/framework"><img src="https://img.shields.io/packagist/v/laravel-zero/framework.svg?label=stable" alt="Latest Stable Version" /></a>
-  <a href="https://packagist.org/packages/laravel-zero/framework"><img src="https://img.shields.io/packagist/l/laravel-zero/framework.svg" alt="License" /></a>
-</p>
+A PHP orchestration daemon that coordinates coding agents against project issues. Symphony polls issue trackers (GitHub Issues, Jira), creates isolated workspaces, and dispatches [Claude Code](https://claude.ai/claude-code) agents to work on each issue with multi-turn support, retry logic, and resource constraints.
 
-Laravel Zero was created by [Nuno Maduro](https://github.com/nunomaduro) and [Owen Voke](https://github.com/owenvoke), and is a micro-framework that provides an elegant starting point for your console application. It is an **unofficial** and customized version of Laravel optimized for building command-line applications.
+## Prerequisites
 
-- Built on top of the [Laravel](https://laravel.com) components.
-- Optional installation of Laravel [Eloquent](https://laravel-zero.com/docs/database/), Laravel [Logging](https://laravel-zero.com/docs/logging/) and many others.
-- Supports interactive [menus](https://laravel-zero.com/docs/build-interactive-menus/) and [desktop notifications](https://laravel-zero.com/docs/send-desktop-notifications/) on Linux, Windows & MacOS.
-- Ships with a [Scheduler](https://laravel-zero.com/docs/task-scheduling/) and  a [Standalone Compiler](https://laravel-zero.com/docs/build-a-standalone-application/).
-- Integration with [Collision](https://github.com/nunomaduro/collision) - Beautiful error reporting
-- Follow the creator Nuno Maduro:
-    - YouTube: **[youtube.com/@nunomaduro](https://www.youtube.com/@nunomaduro)** — Videos every weekday
-    - Twitch: **[twitch.tv/enunomaduro](https://www.twitch.tv/enunomaduro)** — Streams (almost) every weekday
-    - Twitter / X: **[x.com/enunomaduro](https://x.com/enunomaduro)**
-    - LinkedIn: **[linkedin.com/in/nunomaduro](https://www.linkedin.com/in/nunomaduro)**
-    - Instagram: **[instagram.com/enunomaduro](https://www.instagram.com/enunomaduro)**
-    - Tiktok: **[tiktok.com/@enunomaduro](https://www.tiktok.com/@enunomaduro)**
+- PHP 8.4+
+- Extensions: `pcntl`, `posix`
+- [Composer](https://getcomposer.org/)
+- [Claude Code CLI](https://claude.ai/claude-code) installed and authenticated
 
-------
+## Installation
+
+```bash
+git clone https://github.com/datashaman/symphony.git
+cd symphony
+composer install
+```
+
+## Quick Start
+
+1. Copy the example environment file and fill in your tokens:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API tokens
+   ```
+
+2. Edit `WORKFLOW.md` (or create your own) with your tracker config and prompt template. See [WORKFLOW.md](WORKFLOW.md) for a GitHub example or [WORKFLOW.jira.md](WORKFLOW.jira.md) for Jira.
+
+3. Run the daemon:
+
+   ```bash
+   ./application run WORKFLOW.md
+   ```
+
+   Symphony will poll your issue tracker, create workspaces for eligible issues, and launch Claude Code agents to work on them.
+
+4. Stop gracefully with `Ctrl+C` (sends SIGINT). Running agents will finish their current turn before the daemon exits.
+
+## How It Works
+
+1. **Poll** the issue tracker for issues in active states
+2. **Sort** candidates by priority, creation date, and identifier
+3. **Filter** out issues that are already running, claimed, blocked, or in retry backoff
+4. **Fork** a child process per eligible issue (up to `max_concurrent_agents`)
+5. **Each child**: creates a workspace, runs hooks, renders the prompt template, and launches Claude Code
+6. **Multi-turn**: if an agent fails, it retries with `--continue` up to `max_turns` times
+7. **Retry**: failed issues are re-queued with exponential backoff (10s * 2^attempt, capped at 5 min)
+8. **Reconcile**: on each tick, check worker status, kill stalled processes, and handle state transitions
 
 ## Documentation
 
-For full documentation, visit [laravel-zero.com](https://laravel-zero.com/).
-
-## Support the development
-**Do you like this project? Support it by donating**
-
-- PayPal: [Donate](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=66BYDWAT92N6L)
-- Patreon: [Donate](https://www.patreon.com/nunomaduro)
+- **[Tutorial: Getting Started](docs/tutorial/getting-started.md)** - Run Symphony against a GitHub project end-to-end
+- **How-to Guides**
+  - [Configure GitHub Tracker](docs/how-to/configure-github-tracker.md)
+  - [Configure Jira Tracker](docs/how-to/configure-jira-tracker.md)
+  - [Write Workflow Templates](docs/how-to/write-workflow-templates.md)
+  - [Tune Retry and Timeouts](docs/how-to/tune-retry-and-timeouts.md)
+  - [Configure Workspace Hooks](docs/how-to/configure-workspace-hooks.md)
+- **Reference**
+  - [Configuration Schema](docs/reference/configuration.md)
+  - [CLI Usage](docs/reference/cli.md)
+  - [Environment Variables](docs/reference/environment-variables.md)
+  - [Issue DTO](docs/reference/issue-dto.md)
+- **Explanation**
+  - [Architecture](docs/explanation/architecture.md)
+  - [Orchestration Loop](docs/explanation/orchestration-loop.md)
+  - [Multi-turn Sessions](docs/explanation/multi-turn-sessions.md)
+  - [Process Model](docs/explanation/process-model.md)
 
 ## License
 
-Laravel Zero is an open-source software licensed under the MIT license.
+MIT
