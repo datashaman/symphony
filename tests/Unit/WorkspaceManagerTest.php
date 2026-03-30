@@ -69,7 +69,7 @@ it('computes workspace path with identifier sanitization', function () {
     $manager = new WorkspaceManager($config, new NullLogger());
     $path = $manager->pathForIssue(makeTestIssue('sym#42', 'symphony/issue-42'));
 
-    expect($path)->toEndWith('/sym_42');
+    expect($path)->toEndWith('/sym-42');
     expect(str_starts_with($path, realpath($root)))->toBeTrue();
 
     chdir($origDir);

@@ -25,7 +25,7 @@ class WorkspaceManager
 
     public function pathForIssue(Issue $issue): string
     {
-        $key = preg_replace('/[^A-Za-z0-9._-]/', '_', $issue->identifier);
+        $key = preg_replace('/[^A-Za-z0-9._-]/', '-', $issue->identifier);
         $path = $this->root . '/' . $key;
 
         if (!is_dir($this->root)) {
