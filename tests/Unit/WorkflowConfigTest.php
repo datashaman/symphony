@@ -14,7 +14,7 @@ it('applies all defaults when only required fields provided', function () {
 
     expect($config->trackerKind())->toBe('github');
     expect($config->trackerApiKey())->toBe('ghp_test123');
-    expect($config->trackerActiveStates())->toBe(['Todo', 'In Progress']);
+    expect($config->trackerActiveStates())->toBe([]);
     expect($config->trackerTerminalStates())->toBe(['Closed', 'Cancelled', 'Canceled', 'Duplicate', 'Done']);
     expect($config->pollingIntervalMs())->toBe(30000);
     expect($config->maxConcurrentAgents())->toBe(10);

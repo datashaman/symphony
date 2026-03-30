@@ -14,7 +14,7 @@ class WorkflowLoader
     ) {}
 
     /**
-     * @return array{config: array, prompt: string}
+     * @return array{config: array, prompt: string, stage_prompts: array<string, string>}
      */
     public function load(): array
     {
@@ -36,82 +36,52 @@ class WorkflowLoader
      */
     public function parse(string $content): array
     {
-        // Match YAML front matter between --- delimiters
-        if (! preg_match('/\A---\r?\n(.*?)\r?\n---\r?\n(.*)\z/s', $content, $matches)) {
-            throw new InvalidArgumentException(
-                'Invalid workflow format: missing YAML front matter delimiters (---)'
-            );
-        }
-
-        $yamlContent = $matches[1];
-        $body = $matches[2];
-
         try {
-            $config = Yaml::parse($yamlContent);
+            $data = Yaml::parse($content);
         } catch (ParseException $e) {
             throw new InvalidArgumentException(
-                "Invalid YAML in workflow front matter: {$e->getMessage()}",
+                "Invalid YAML in workflow file: {$e->getMessage()}",
                 0,
                 $e
             );
         }
 
-        if (! is_array($config)) {
+        if (! is_array($data)) {
             throw new InvalidArgumentException(
-                'Invalid workflow format: YAML front matter must be a mapping'
+                'Invalid workflow format: YAML must be a mapping'
             );
         }
 
-        // Parse stage-specific prompts from the body
-        $stagePrompts = $this->parseStagePrompts($body);
-        $prompt = $stagePrompts['_default'] ?? '';
-        unset($stagePrompts['_default']);
+        $hasPipeline = ! empty($data['pipeline']['stages'] ?? []);
 
-        $hasPipeline = ! empty($config['pipeline']['stages'] ?? []);
+        // Extract stage prompts from pipeline stages
+        $stagePrompts = [];
+        if ($hasPipeline) {
+            foreach ($data['pipeline']['stages'] as &$stage) {
+                $name = $stage['name'] ?? '';
+                $prompt = $stage['prompt'] ?? '';
+                if (is_string($prompt) && trim($prompt) !== '') {
+                    $stagePrompts[$name] = $prompt;
+                }
+                unset($stage['prompt']);
+            }
+            unset($stage);
+        }
 
-        if (! $hasPipeline && trim($prompt) === '') {
+        // Extract top-level prompt
+        $prompt = $data['prompt'] ?? '';
+        unset($data['prompt']);
+
+        if (! $hasPipeline && (! is_string($prompt) || trim($prompt) === '')) {
             throw new InvalidArgumentException(
                 'Invalid workflow format: empty prompt template'
             );
         }
 
         return [
-            'config' => $config,
-            'prompt' => $prompt,
+            'config' => $data,
+            'prompt' => is_string($prompt) ? $prompt : '',
             'stage_prompts' => $stagePrompts,
         ];
-    }
-
-    /**
-     * Parse body into default prompt and named stage prompts.
-     *
-     * Stage prompts are delimited by ---stage:name--- markers.
-     * Content before the first marker is the default prompt.
-     *
-     * @return array<string, string> Keys are stage names (or '_default')
-     */
-    private function parseStagePrompts(string $body): array
-    {
-        $parts = preg_split('/^---stage:(\w+)---\s*$/m', $body, -1, PREG_SPLIT_DELIM_CAPTURE);
-
-        $prompts = [];
-
-        // First part is the default prompt (content before any stage marker)
-        $default = trim($parts[0] ?? '');
-        if ($default !== '') {
-            $prompts['_default'] = $parts[0];
-        }
-
-        // Remaining parts alternate: stage name, stage content
-        for ($i = 1; $i < count($parts); $i += 2) {
-            $stageName = $parts[$i];
-            $stageContent = $parts[$i + 1] ?? '';
-            $trimmed = trim($stageContent);
-            if ($trimmed !== '') {
-                $prompts[$stageName] = $stageContent;
-            }
-        }
-
-        return $prompts;
     }
 }

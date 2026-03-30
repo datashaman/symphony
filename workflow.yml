@@ -1,0 +1,65 @@
+tracker:
+  kind: github
+  api_key: $GITHUB_TOKEN
+  terminal_states:
+    - done
+    - closed
+    - cancelled
+
+polling:
+  interval_ms: 30000
+
+workspace:
+  setup:
+    - cp %BASE%/.env .
+    - composer install --no-interaction --no-progress
+
+agent:
+  max_concurrent_agents: 5
+  max_turns: 20
+
+pipeline:
+  stages:
+    - name: plan
+      trigger: stage:plan
+      command: claude -p --verbose --output-format stream-json --model claude-opus-4-6
+      max_turns: 10
+      prompt: |
+        You are a senior architect analyzing issue {{ issue.identifier }}: {{ issue.title }}
+
+        {{ issue.description }}
+
+        Your job is to:
+        1. Understand the requirements
+        2. Research the codebase for relevant context
+        3. Produce a detailed implementation plan
+
+        When your plan is ready, write it as a comment on the issue. Then remove the `stage:plan` label and add the `stage:implement` label.
+
+    - name: implement
+      trigger: stage:implement
+      command: claude -p --verbose --output-format stream-json --model claude-sonnet-4-6 --dangerously-skip-permissions
+      max_turns: 30
+      prompt: |
+        You are an expert engineer implementing issue {{ issue.identifier }}: {{ issue.title }}
+
+        {{ issue.description }}
+
+        Read the planning comments on this issue for context and implementation guidance. Follow the plan closely.
+
+        {% if attempt %}
+        This is retry attempt {{ attempt }}. Check git log and test output to continue.
+        {% endif %}
+
+        ## Prime Directive
+
+        After completing all work, you MUST commit, push, and open a pull request. This is the entire point of your task — unshipped work has zero value.
+
+        1. **Commit** all changes with a clear, descriptive commit message referencing {{ issue.identifier }}.
+        2. **Push** the current branch to the remote.
+        3. **Create a pull request** with:
+           - A concise title summarizing the change
+           - A body that describes what was done and includes "Closes {{ issue.url | default(issue.identifier) }}"
+           - Target the repository's default branch (main/master)
+
+        Do NOT stop after making code changes. The pull request is your deliverable.

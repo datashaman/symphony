@@ -66,8 +66,8 @@ class Orchestrator
         // Ensure configured labels exist on the tracker
         try {
             $created = $this->tracker->ensureLabels($this->config->pipelineTriggerLabels());
-            if (!empty($created)) {
-                $this->console('  Created labels: ' . implode(', ', $created));
+            if (! empty($created)) {
+                $this->console('  Created labels: '.implode(', ', $created));
             }
         } catch (\Exception $e) {
             $this->logger->warning("Failed to ensure labels: {$e->getMessage()}");
@@ -158,7 +158,7 @@ class Orchestrator
     private function filterEligible(array $candidates): array
     {
         $eligible = [];
-        $activeStates = array_map('strtolower', $this->config->trackerActiveStates());
+        $terminalStates = array_map('strtolower', $this->config->trackerTerminalStates());
         $hasPipeline = $this->config->hasPipeline();
 
         foreach ($candidates as $issue) {
@@ -193,12 +193,12 @@ class Orchestrator
                 }
             }
 
-            // Skip if has active blockers
+            // Skip if has non-terminal blockers
             if (! empty($issue->blockedBy)) {
                 $blockerStates = $this->tracker->fetchStatesByIds($issue->blockedBy);
                 $hasActiveBlocker = false;
                 foreach ($blockerStates as $state) {
-                    if (in_array(strtolower($state), $activeStates, true)) {
+                    if (! in_array(strtolower($state), $terminalStates, true)) {
                         $hasActiveBlocker = true;
                         break;
                     }
@@ -364,7 +364,6 @@ class Orchestrator
             $ids = array_keys($this->running);
             $states = $this->tracker->fetchStatesByIds($ids);
             $terminalStates = array_map('strtolower', $this->config->trackerTerminalStates());
-            $activeStates = array_map('strtolower', $this->config->trackerActiveStates());
 
             foreach ($states as $id => $state) {
                 if (! isset($this->running[$id])) {
@@ -381,15 +380,6 @@ class Orchestrator
                     ]);
                     posix_kill($this->running[$id]['pid'], SIGTERM);
                     $this->workspace->remove($this->running[$id]['issue']);
-                    $this->unclaimWorker($id);
-                    unset($this->running[$id]);
-                } elseif (! in_array($stateLower, $activeStates, true)) {
-                    // Non-active, non-terminal: kill but preserve workspace
-                    $this->logger->info('Issue moved to non-active state, killing worker', [
-                        'issue_id' => $id,
-                        'state' => $state,
-                    ]);
-                    posix_kill($this->running[$id]['pid'], SIGTERM);
                     $this->unclaimWorker($id);
                     unset($this->running[$id]);
                 }
