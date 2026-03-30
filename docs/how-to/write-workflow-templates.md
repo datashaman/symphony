@@ -119,9 +119,19 @@ This is a bug fix. Write a failing test first, then fix the bug.
 
 ## Prime Directive
 
-Symphony automatically appends a "Prime Directive" section to every rendered prompt. This instructs the agent to commit all changes, push the branch, and create a pull request linking back to the issue. You do not need to include these instructions in your template — they are always added.
+Include commit/push/PR instructions directly in your workflow template for stages where you want the agent to ship its work. For example:
 
-The directive uses `issue.identifier` and `issue.url` to generate the correct closing reference (e.g., `Closes https://github.com/owner/repo/issues/42`).
+```twig
+## Prime Directive
+
+After completing all work, you MUST commit, push, and open a pull request.
+
+1. **Commit** all changes referencing {{ '{{' }} issue.identifier {{ '}}' }}.
+2. **Push** the current branch.
+3. **Create a pull request** with "Closes {{ '{{' }} issue.url | default(issue.identifier) {{ '}}' }}" in the body.
+```
+
+In multi-stage pipelines, only add this to the final stage (e.g., `implement`), not intermediate stages like `plan`.
 
 ## Tips
 
@@ -130,4 +140,3 @@ The directive uses `issue.identifier` and `issue.url` to generate the correct cl
 - DateTimes are converted to ISO 8601 strings before rendering
 - Keep prompts focused: the more specific the instructions, the better the agent performs
 - Use `{% if attempt %}` to give retry-specific guidance
-- Do not add commit/push/PR instructions to your template — the prime directive handles this automatically

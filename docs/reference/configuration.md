@@ -10,7 +10,7 @@ String values support environment variable substitution: `$VAR` or `${VAR}`. An 
 |-----|------|----------|---------|-------------|
 | `tracker.kind` | string | Yes | — | Tracker type: `github` or `jira` |
 | `tracker.api_key` | string | Yes | — | API authentication token |
-| `tracker.repository` | string | GitHub only | — | GitHub `owner/repo` |
+| `tracker.repository` | string | GitHub only | Auto-detected from git remote | GitHub `owner/repo` |
 | `tracker.endpoint` | string | Jira only | — | Jira Cloud base URL |
 | `tracker.project_slug` | string | Jira only | — | Jira project key (e.g., `PROJ`) |
 | `tracker.email` | string | Jira only | — | Email for Jira API auth |
@@ -58,7 +58,6 @@ The entire `claude` section is optional. Sensible defaults are provided.
 ---
 tracker:
   kind: github
-  repository: datashaman/my-project
   api_key: $GITHUB_TOKEN
   active_states:
     - todo

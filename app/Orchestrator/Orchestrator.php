@@ -63,7 +63,15 @@ class Orchestrator
         $this->logger->info('Orchestrator starting');
 
         // Ensure configured labels exist on the tracker
-        $this->tracker->ensureLabels();
+        try {
+            $created = $this->tracker->ensureLabels();
+            if (!empty($created)) {
+                $this->console('  Created labels: ' . implode(', ', $created));
+            }
+        } catch (\Exception $e) {
+            $this->logger->warning("Failed to ensure labels: {$e->getMessage()}");
+            $this->console("  <comment>Warning: failed to ensure labels: {$e->getMessage()}</comment>");
+        }
 
         // Startup cleanup
         $this->workspace->cleanupTerminal($this->tracker);

@@ -10,7 +10,7 @@ it('renders prompt with issue context', function () {
         ['identifier' => 'symphony#42', 'title' => 'Fix login bug'],
     );
 
-    expect($result)->toStartWith('Fix symphony#42: Fix login bug');
+    expect($result)->toBe('Fix symphony#42: Fix login bug');
 });
 
 it('throws on undefined variable', function () {
@@ -30,7 +30,7 @@ it('converts DateTime fields to ISO-8601 strings', function () {
         ['createdAt' => new DateTimeImmutable('2025-01-15T15:00:00+00:00')],
     );
 
-    expect($result)->toStartWith('Created: 2025-01-15T15:00:00+00:00');
+    expect($result)->toBe('Created: 2025-01-15T15:00:00+00:00');
 });
 
 it('passes attempt as null for first attempt', function () {
@@ -42,7 +42,7 @@ it('passes attempt as null for first attempt', function () {
         null,
     );
 
-    expect($result)->toStartWith('First try');
+    expect($result)->toBe('First try');
 });
 
 it('passes attempt as integer for retries', function () {
@@ -54,34 +54,5 @@ it('passes attempt as integer for retries', function () {
         3,
     );
 
-    expect($result)->toStartWith('Retry attempt 3');
-});
-
-it('appends prime directive with issue URL for closing reference', function () {
-    $builder = new PromptBuilder();
-
-    $result = $builder->render(
-        'Fix the bug',
-        [
-            'identifier' => 'symphony#42',
-            'title' => 'Fix login bug',
-            'url' => 'https://github.com/datashaman/symphony/issues/42',
-        ],
-    );
-
-    expect($result)->toContain('## Prime Directive');
-    expect($result)->toContain('Closes https://github.com/datashaman/symphony/issues/42');
-    expect($result)->toContain('referencing symphony#42');
-    expect($result)->toContain('Create a pull request');
-});
-
-it('appends prime directive with identifier when URL is empty', function () {
-    $builder = new PromptBuilder();
-
-    $result = $builder->render(
-        'Fix the bug',
-        ['identifier' => 'PROJ-123', 'title' => 'Fix login bug'],
-    );
-
-    expect($result)->toContain('Closes PROJ-123');
+    expect($result)->toBe('Retry attempt 3');
 });

@@ -7,7 +7,6 @@ Set `tracker.kind` to `github` in your workflow file:
 ```yaml
 tracker:
   kind: github
-  repository: owner/repo
   api_key: $GITHUB_TOKEN
   active_states:
     - todo
@@ -30,7 +29,7 @@ Reference it in the workflow as `$GITHUB_TOKEN` or `${GITHUB_TOKEN}`.
 
 ## Repository
 
-Set `tracker.repository` to the `owner/repo` format:
+By default, Symphony auto-detects the repository from the CWD's `origin` git remote. To override, set `tracker.repository` explicitly:
 
 ```yaml
 tracker:
