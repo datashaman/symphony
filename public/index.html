@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symphony Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --pico-font-size: 15px;
+        }
+        body { padding: 0; margin: 0; }
+        nav.top-bar {
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+            padding: 0.5rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        nav.top-bar h1 { margin: 0; font-size: 1.2rem; }
+        .status-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .status-running { background: #22c55e; color: #fff; }
+        .status-stopped { background: #ef4444; color: #fff; }
+        .dashboard { padding: 1rem 1.5rem; }
+        .grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .card {
+            background: var(--pico-card-background-color);
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .card h3 { margin-top: 0; font-size: 1rem; }
+        .stat-number { font-size: 1.8rem; font-weight: 700; }
+        .stat-label { font-size: 0.8rem; color: var(--pico-muted-color); }
+        .stats-row {
+            display: flex;
+            gap: 2rem;
+        }
+        table { font-size: 0.85rem; margin: 0; }
+        table td, table th { padding: 0.4rem 0.6rem; }
+        .log-viewer {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.75rem;
+            padding: 0.8rem;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.5;
+        }
+        .log-viewer .log-line:hover { background: rgba(255,255,255,0.05); }
+        .config-editor {
+            width: 100%;
+            min-height: 300px;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            padding: 0.8rem;
+            resize: vertical;
+        }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .btn-sm {
+            padding: 0.3rem 0.8rem;
+            font-size: 0.8rem;
+        }
+        .elapsed { color: var(--pico-muted-color); }
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--pico-muted-color);
+        }
+        .tab-buttons { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .tab-buttons button {
+            padding: 0.3rem 0.8rem;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .tab-buttons button.active {
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+        }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body x-data="dashboard()" x-init="init()">
+
+<nav class="top-bar">
+    <div style="display:flex;align-items:center;gap:1rem;">
+        <h1>Symphony</h1>
+        <span class="status-badge" :class="status.status === 'running' ? 'status-running' : 'status-stopped'"
+              x-text="status.status || 'unknown'"></span>
+    </div>
+    <div class="btn-group">
+        <button class="btn-sm" @click="controlAction('start')" :disabled="status.status === 'running'"
+                :aria-busy="controlling">Start</button>
+        <button class="btn-sm secondary" @click="controlAction('stop')" :disabled="status.status !== 'running'"
+                :aria-busy="controlling">Stop</button>
+    </div>
+</nav>
+
+<div class="dashboard">
+    <!-- Stats cards -->
+    <div class="grid-cards">
+        <div class="card">
+            <h3>Agents</h3>
+            <div class="stats-row">
+                <div>
+                    <div class="stat-number" x-text="agents.length">0</div>
+                    <div class="stat-label">Running</div>
+                </div>
+                <div>
+                    <div class="stat-number" x-text="claimed.length">0</div>
+                    <div class="stat-label">Claimed</div>
+                </div>
+                <div>
+                    <div class="stat-number" x-text="retryQueue.length">0</div>
+                    <div class="stat-label">Retry Queue</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Token Usage</h3>
+            <div class="stats-row">
+                <div>
+                    <div class="stat-number" x-text="formatNumber(tokens.input_tokens)">0</div>
+                    <div class="stat-label">Input</div>
+                </div>
+                <div>
+                    <div class="stat-number" x-text="formatNumber(tokens.output_tokens)">0</div>
+                    <div class="stat-label">Output</div>
+                </div>
+                <div>
+                    <div class="stat-number" x-text="'$' + (tokens.estimated_cost_usd || 0).toFixed(2)">$0.00</div>
+                    <div class="stat-label">Est. Cost</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Running Agents -->
+    <div class="card" style="margin-bottom:1rem;">
+        <h3>Running Agents</h3>
+        <template x-if="agents.length === 0">
+            <div class="empty-state">No agents running</div>
+        </template>
+        <template x-if="agents.length > 0">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Issue</th>
+                        <th>Title</th>
+                        <th>Stage</th>
+                        <th>PID</th>
+                        <th>Elapsed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="agent in agents" :key="agent.issue_id">
+                        <tr>
+                            <td><a :href="agent.issue_url" target="_blank" x-text="agent.issue_identifier"></a></td>
+                            <td x-text="agent.issue_title"></td>
+                            <td x-text="agent.stage || '-'"></td>
+                            <td x-text="agent.pid"></td>
+                            <td class="elapsed" x-text="formatElapsed(agent.elapsed_seconds)"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </template>
+    </div>
+
+    <!-- Queue -->
+    <div class="card" style="margin-bottom:1rem;">
+        <h3>Queue</h3>
+        <div class="tab-buttons">
+            <button :class="queueTab === 'claimed' ? 'active' : ''" @click="queueTab = 'claimed'">
+                Claimed (<span x-text="claimed.length"></span>)
+            </button>
+            <button :class="queueTab === 'retry' ? 'active' : ''" @click="queueTab = 'retry'">
+                Retry (<span x-text="retryQueue.length"></span>)
+            </button>
+        </div>
+
+        <div x-show="queueTab === 'claimed'">
+            <template x-if="claimed.length === 0">
+                <div class="empty-state">No claimed issues</div>
+            </template>
+            <template x-if="claimed.length > 0">
+                <table>
+                    <thead><tr><th>Claim Key</th></tr></thead>
+                    <tbody>
+                        <template x-for="key in claimed" :key="key">
+                            <tr><td x-text="key"></td></tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+        </div>
+
+        <div x-show="queueTab === 'retry'">
+            <template x-if="retryQueue.length === 0">
+                <div class="empty-state">No retries queued</div>
+            </template>
+            <template x-if="retryQueue.length > 0">
+                <table>
+                    <thead>
+                        <tr><th>Issue</th><th>Attempt</th><th>Remaining</th><th>Error</th></tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="entry in retryQueue" :key="entry.issue_id">
+                            <tr>
+                                <td x-text="entry.issue_id"></td>
+                                <td x-text="entry.attempt"></td>
+                                <td x-text="formatElapsed(entry.remaining_seconds)"></td>
+                                <td x-text="entry.error"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+        </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="card" style="margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>Logs</h3>
+            <label style="font-size:0.8rem;display:flex;align-items:center;gap:0.3rem;">
+                <input type="checkbox" x-model="autoScroll" role="switch" style="margin:0;">
+                Auto-scroll
+            </label>
+        </div>
+        <div class="log-viewer" x-ref="logViewer">
+            <template x-for="(line, i) in logs" :key="i">
+                <div class="log-line" x-text="line"></div>
+            </template>
+            <template x-if="logs.length === 0">
+                <div class="empty-state" style="color:#666;">No log entries</div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>Workflow Configuration</h3>
+            <div class="btn-group">
+                <button class="btn-sm" @click="saveConfig()" :aria-busy="savingConfig">Save</button>
+                <button class="btn-sm secondary" @click="loadConfig()">Reload</button>
+            </div>
+        </div>
+        <div x-show="configError" style="color:var(--pico-del-color);font-size:0.8rem;margin-bottom:0.5rem;" x-text="configError"></div>
+        <div x-show="configSaved" style="color:var(--pico-ins-color);font-size:0.8rem;margin-bottom:0.5rem;">Configuration saved</div>
+        <textarea class="config-editor" x-model="configContent"></textarea>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
+<script src="app.js"></script>
+</body>
+</html>
