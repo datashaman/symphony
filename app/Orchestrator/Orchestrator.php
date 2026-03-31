@@ -6,6 +6,7 @@ use App\Agent\ClaudeCodeRunner;
 use App\Config\StageConfig;
 use App\Config\WorkflowConfig;
 use App\Prompt\PromptBuilder;
+use App\State\StateStore;
 use App\Tracker\Issue;
 use App\Tracker\TrackerInterface;
 use App\Workflow\WorkflowLoader;
@@ -38,6 +39,7 @@ class Orchestrator
         private WorkflowLoader $workflowLoader,
         private LoggerInterface $logger,
         private ?OutputInterface $output = null,
+        private ?StateStore $stateStore = null,
     ) {}
 
     private function console(string $message): void
@@ -77,14 +79,18 @@ class Orchestrator
         // Startup cleanup
         $this->workspace->cleanupTerminal($this->tracker);
 
+        $this->stateStore?->markRunning(getmypid(), '');
+
         while (! $this->shutdown) {
             $this->tick();
+            $this->flushState();
 
             $sleepMs = $this->config->pollingIntervalMs();
             $this->sleepMs($sleepMs);
         }
 
         $this->waitForChildren();
+        $this->stateStore?->markStopped();
         $this->console('<info>Symphony stopped</info>');
         $this->logger->info('Orchestrator stopped', ['totals' => $this->claudeTotals]);
     }
@@ -459,6 +465,22 @@ class Orchestrator
             if (! empty($this->running)) {
                 usleep(100000); // 100ms
             }
+        }
+    }
+
+    private function flushState(): void
+    {
+        try {
+            $this->stateStore?->flush(
+                $this->running,
+                $this->claimed,
+                $this->retryQueue,
+                $this->claudeTotals
+            );
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to flush state to store', [
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

@@ -6,6 +6,7 @@ use App\Agent\ClaudeCodeRunner;
 use App\Config\WorkflowConfig;
 use App\Orchestrator\Orchestrator;
 use App\Prompt\PromptBuilder;
+use App\State\StateStore;
 use App\Tracker\GitHubTracker;
 use App\Tracker\JiraTracker;
 use App\Tracker\TrackerInterface;
@@ -47,11 +48,12 @@ class RunCommand extends Command
             $workspace = new WorkspaceManager($config, $logger);
             $promptBuilder = new PromptBuilder;
             $agentRunner = new ClaudeCodeRunner($config, $logger, $this->output);
+            $stateStore = new StateStore;
 
             // Create orchestrator
             $orchestrator = new Orchestrator(
                 $config, $tracker, $workspace, $promptBuilder,
-                $agentRunner, $loader, $logger, $this->output
+                $agentRunner, $loader, $logger, $this->output, $stateStore
             );
 
             // Register signal handlers
